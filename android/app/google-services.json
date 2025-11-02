@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "469581531588",
+    "project_id": "jobipo-app27",
+    "storage_bucket": "jobipo-app27.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:469581531588:android:1f24a51dc6f371ef6fbc91",
+        "android_client_info": {
+          "package_name": "com.jobipoapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqhNc0EuMMonv3V7A40Fs_udgAVyfnNXQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
