@@ -4,53 +4,55 @@
 
 export let firebaseRemoteConfigData = {
   msg: {
-    r_n: "Please enter your name", //empty condition for name
-    r_f_n: "Please enter a first name", //empty condition for first name
-    r_l_n: "Please enter a last name", //empty condition for last name
-    r_u_n: "Please enter a user name", //empty condition for username
+    r_n: 'Please enter your name', //empty condition for name
+    r_f_n: 'Please enter a first name', //empty condition for first name
+    r_l_n: 'Please enter a last name', //empty condition for last name
+    r_u_n: 'Please enter a user name', //empty condition for username
 
-    v_n: "Please enter a valid name", //required condition for name
-    v_f_n: "Please enter a valid first name", //required condition for first name
-    v_l_n: "Please enter a valid last name", //required condition for last name
-    v_u_n: "Please enter a valid user name", //required condition for username
+    v_n: 'Please enter a valid name', //required condition for name
+    v_f_n: 'Please enter a valid first name', //required condition for first name
+    v_l_n: 'Please enter a valid last name', //required condition for last name
+    v_u_n: 'Please enter a valid user name', //required condition for username
 
-    r_e: "Please enter your email", //required condition for email
-    v_e: "Please enter valid email", //validation condition for email
+    r_e: 'Please enter your email', //required condition for email
+    v_e: 'Please enter valid email', //validation condition for email
 
-    r_ph: "Please enter your phone number", //required condition for phone number
-    r_mb: "Please enter your mobile number", //required condition for mobile number
+    r_ph: 'Please enter your phone number', //required condition for phone number
+    r_mb: 'Please enter your mobile number', //required condition for mobile number
 
-    r_p: "Please enter your password", //empty condition for password(signup screen)
-    r_c_p: "Please enter old password", //empty condition for current password(change password screen)
-    r_n_p: "Please enter your new password", //empty condition for new password(change password screen)
-    r_co_p: "Please enter your confirm password", //empty condition for confirm password
-    v_p: "Password should be between 8 to 15 characters and should contain atleast one uppercase, one lowercase ,one number", //validation condition for passwords(new,old,confirm)
+    r_p: 'Please enter your password', //empty condition for password(signup screen)
+    r_c_p: 'Please enter old password', //empty condition for current password(change password screen)
+    r_n_p: 'Please enter your new password', //empty condition for new password(change password screen)
+    r_co_p: 'Please enter your confirm password', //empty condition for confirm password
+    v_p: 'Password should be between 8 to 15 characters and should contain atleast one uppercase, one lowercase ,one number', //validation condition for passwords(new,old,confirm)
     // v_c_p: "Password should be between 8 to 15 characters and should contain atleast one uppercase, one lowercase ,one number", //validation condition for passwords(new,old,confirm)
-    v_n_p: "Password should be between 8 to 15 characters and should contain atleast one uppercase, one lowercase ,one number", //validation condition for passwords(new,old,confirm)
+    v_n_p:
+      'Password should be between 8 to 15 characters and should contain atleast one uppercase, one lowercase ,one number', //validation condition for passwords(new,old,confirm)
     v_co_p:
-      "Password should be between 8 to 15 characters and should contain atleast one uppercase, one lowercase ,one number", //validation condition for passwords(new,old,confirm)
-    v_c_p: "Password and confirm password must be same", //confirm password does not match password or new password
-    v_nc_p: "New password and confirm password must be same", //confirm password does not match password or new password
+      'Password should be between 8 to 15 characters and should contain atleast one uppercase, one lowercase ,one number', //validation condition for passwords(new,old,confirm)
+    v_c_p: 'Password and confirm password must be same', //confirm password does not match password or new password
+    v_nc_p: 'New password and confirm password must be same', //confirm password does not match password or new password
 
-    r_z_c: "Please enter your zip code", //required condition for zip code
+    r_z_c: 'Please enter your zip code', //required condition for zip code
 
-    r_i: "Please select image", //required condition for image
+    r_i: 'Please select image', //required condition for image
 
-    r_a: "Please select address", //required condition for address
-    r_d: "Please select dob", //required condition for dob
+    r_a: 'Please select address', //required condition for address
+    r_d: 'Please select dob', //required condition for dob
 
-    r_o: "Please enter OTP", //required condition for otp
-    i_o: "Invalid OTP", //otp does not match
-    i_e_d_m: "Please enter additional message", //additional message
+    r_o: 'Please enter OTP', //required condition for otp
+    i_o: 'Invalid OTP', //otp does not match
+    i_e_d_m: 'Please enter additional message', //additional message
 
-    r_t_p: "Please agree with Terms and Condition and Privacy Policy", //required condition for terms and conditions & privacy policy
+    r_t_p: 'Please agree with Terms and Condition and Privacy Policy', //required condition for terms and conditions & privacy policy
     // l_n: ""s,
   },
 
-  pass :'KeyKnockerRandom@123',
-  placeKey:'UVVsNllWTjVRbUZHZDNBMk9XRm9TRVY0VGpKSVlVaDFYM05wUjFWVE1UbEdjMll3Y25GUktleUtub2NrZXJSYW5kb21AMTIzVVZWc05sbFdUalZSYlVaSFpETkJNazlYUm05VFJWWTBWR3BLU1ZsVmFERllNMDV3VWpGV1ZFMVViRWRqTWxsM1kyNUdVa3RsZVV0dWIyTnJaWEpTWVc1a2IyMUFNVEl6',
-  calling_Ago_key:'WW1SbU5UUmxZemhpTURNeU5HTmtNVGxpWWpjM09HUTJaVGhtT0RJMk16QT1LZXlLbm9ja2VyUmFuZG9tQDEyM1dXMVNiVTVVVW14WmVtaHBUVVJOZVU1SFRtdE5WR3hwV1dwak0wOUhVVEphVkdodFQwUkpNazE2UVQxTFpYbExibTlqYTJWeVVtRnVaRzl0UURFeU13PT0=',
-
+  pass: 'KeyKnockerRandom@123',
+  placeKey:
+    'UVVsNllWTjVRbUZHZDNBMk9XRm9TRVY0VGpKSVlVaDFYM05wUjFWVE1UbEdjMll3Y25GUktleUtub2NrZXJSYW5kb21AMTIzVVZWc05sbFdUalZSYlVaSFpETkJNazlYUm05VFJWWTBWR3BLU1ZsVmFERllNMDV3VWpGV1ZFMVViRWRqTWxsM1kyNUdVa3RsZVV0dWIyTnJaWEpTWVc1a2IyMUFNVEl6',
+  calling_Ago_key:
+    'WW1SbU5UUmxZemhpTURNeU5HTmtNVGxpWWpjM09HUTJaVGhtT0RJMk16QT1LZXlLbm9ja2VyUmFuZG9tQDEyM1dXMVNiVTVVVW14WmVtaHBUVVJOZVU1SFRtdE5WR3hwV1dwak0wOUhVVEphVkdodFQwUkpNazE2UVQxTFpYbExibTlqYTJWeVVtRnVaRzl0UURFeU13PT0=',
 
   lengths: {
     min_n: 1, //minimum length of name

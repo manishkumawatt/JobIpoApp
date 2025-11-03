@@ -15,6 +15,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 
 import Login from './src/screens/Auth/Login.js';
 import Register from './src/screens/Auth/Register.js';
+import LocationPicker from './src/screens/Auth/LocationPicker.js';
 import Home from './src/screens/Home.js';
 import Kyc from './src/screens/Kyc.js';
 import Visiting from './src/screens/Visiting.js';
@@ -763,6 +764,14 @@ export default function App() {
                 <Drawer.Screen
                   name="OtpScreen"
                   component={OtpScreen}
+                  options={{
+                    headerShown: false,
+                    drawerStyle: {display: 'none'},
+                  }}
+                />
+                <Drawer.Screen
+                  name="LocationPicker"
+                  component={LocationPicker}
                   options={{
                     headerShown: false,
                     drawerStyle: {display: 'none'},

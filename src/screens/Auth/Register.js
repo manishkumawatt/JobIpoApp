@@ -30,6 +30,9 @@ import {CommonTextInputs, KeyboardScroll} from '../../component';
 import {useDispatch} from 'react-redux';
 import {showToastMessage} from '../../utils/Toast';
 import {loadingShow} from '../../appRedux/actions/loadingAction';
+import DatePicker from 'react-native-date-picker';
+import {kAddress, kDob} from '../../utils/validation/validationValues';
+import fonts from '../../theme/fonts';
 
 // Dummy Button Component (Replace with your actual Button component if you have one)
 const Button = ({onPress, text, style}) => (
@@ -38,7 +41,7 @@ const Button = ({onPress, text, style}) => (
   </TouchableOpacity>
 );
 
-const Register = ({navigation}) => {
+const Register = ({navigation, route}) => {
   const [fullName, setfullName] = useState('');
   const [emailID, setemailID] = useState('');
   const [contactNumber, setcontactNumber] = useState('');
@@ -50,6 +53,20 @@ const Register = ({navigation}) => {
   const [ShowSubmit, setShowSubmit] = useState(1);
   const [timer, setTimer] = useState(30);
   const [isOtpSent, setIsOtpSent] = useState(false);
+
+  // New states for location, date of birth, and gender
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date(2000, 0, 1)); // Default to a reasonable date
+  const [focusedInput, setFocusedInput] = useState(null);
+  const [locationSelected, setLocationSelected] = useState(false);
+
+  // Location detail states
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
+  const [locationCity, setLocationCity] = useState('');
+  const [locationState, setLocationState] = useState('');
+  const [pincode, setPincode] = useState('');
+  const [area, setArea] = useState('');
 
   const otpRefs = useRef([]);
   const dispatch = useDispatch();
@@ -66,26 +83,27 @@ const Register = ({navigation}) => {
     slideAnim.setValue(50);
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      setIsOtpSent(false);
-      setotp(['', '', '', '']);
-      setRotp('');
-      setTimer(30);
-      setFilterDisplay(1);
-      setShowSubmit(1);
-      setfullName('');
-      setemailID('');
-      setcontactNumber('');
-      setuniqueCode('');
-      setterms(0);
-      resetAnimations();
+  // Track if this is the first focus
+  const isFirstFocus = useRef(true);
 
-      return () => {
-        // Cleanup logic if needed
-      };
-    }, []),
-  );
+  // useFocusEffect(
+  //   useCallback(() => {
+  //     // Never reset field values on focus; only clear validation errors
+  //     const updatedAccountReq = {...accountReq};
+  //     if (updatedAccountReq.validators) {
+  //       Object.keys(updatedAccountReq.validators).forEach(key => {
+  //         if (updatedAccountReq.validators[key]) {
+  //           updatedAccountReq.validators[key].error = '';
+  //         }
+  //       });
+  //     }
+  //     setAccountReq(updatedAccountReq);
+
+  //     return () => {
+  //       // Cleanup logic if needed
+  //     };
+  //   }, []),
+  // );
 
   let reg = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   // /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{3,}))$/; //email
@@ -95,6 +113,14 @@ const Register = ({navigation}) => {
     emailID: '',
     contactNumber: '',
     uniqueCode: '',
+    currentLocation: '',
+    dateOfBirth: '',
+    gender: '1', // Default to Male
+    lat: '',
+    lng: '',
+    city: '',
+    state: '',
+    pincode: '',
     validators: {
       fullName: {
         type: 'name',
@@ -111,7 +137,20 @@ const Register = ({navigation}) => {
         error: '',
         required: true,
       },
-
+      currentLocation: {
+        type: kAddress,
+        error: '',
+        required: true,
+      },
+      dateOfBirth: {
+        type: kDob,
+        error: '',
+        required: true,
+      },
+      gender: {
+        error: '',
+        required: true,
+      },
       // terms: {
       //   error: '',
       //   required: true,
@@ -120,8 +159,16 @@ const Register = ({navigation}) => {
   });
 
   const CreateUser = async () => {
-    let validForm = ValidateForm(accountReq);
-    setAccountReq({...accountReq}, validForm.value);
+    // Clone to avoid in-place mutation blocking React re-render
+    const formCopy = JSON.parse(JSON.stringify(accountReq));
+    let validForm = ValidateForm(formCopy);
+    setAccountReq(validForm.value);
+    console.log('validForm', validForm);
+    // Custom validation for gender
+    if (validForm.status && !validateGender()) {
+      return;
+    }
+
     // // console.log('accountReq', accountReq);
     if (validForm.status) {
       Keyboard.dismiss();
@@ -133,9 +180,18 @@ const Register = ({navigation}) => {
         email: accountReq?.emailID,
         mobile: accountReq?.contactNumber,
         referCode: accountReq?.uniqueCode,
+        current_location: accountReq?.currentLocation,
+        lat: accountReq?.lat || lat,
+        lng: accountReq?.lng || lng,
+        city: accountReq?.city || locationCity,
+        state: accountReq?.state || locationState,
+        pincode: accountReq?.pincode || pincode,
+        dob: accountReq?.dateOfBirth,
+        gender: accountReq?.gender,
         notificationConsent: 1,
         is_sms_enable: terms ? 1 : 0,
       };
+      console.log('obj', obj);
       // dispatch(loadingShow(true));
       // try {
       //   const ResData = await fetch(
@@ -169,7 +225,7 @@ const Register = ({navigation}) => {
       // } finally {
       //   dispatch(loadingShow(false));
       // }
-
+      return;
       dispatch(checkUserApi(obj)).then(response => {
         if (response?.success) {
           // // console.log('responseresponse', response);
@@ -181,14 +237,100 @@ const Register = ({navigation}) => {
   };
 
   const methodSetupAccountRequest = (key, value) => {
+    console.log(`methodSetupAccountRequest: ${key} = ${value}`);
     let newValue = value;
-    let dic = {...accountReq};
-    dic[key] = newValue;
-    if (dic.validators && dic.validators[key]) {
-      dic.validators[key].error = '';
-    }
+    setAccountReq(prev => {
+      let dic = {...prev};
+      dic[key] = newValue;
+      if (dic.validators && dic.validators[key]) {
+        dic.validators[key].error = '';
+      }
+      console.log(`Updated accountReq.${key}:`, dic[key]);
+      return dic;
+    });
+  };
 
-    setAccountReq(dic);
+  // Handle date selection
+  const handleDateConfirm = date => {
+    setSelectedDate(date);
+    // Format date as DD/MM/YYYY
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const formattedDate = `${day}/${month}/${year}`;
+    methodSetupAccountRequest('dateOfBirth', formattedDate);
+    setDatePickerOpen(false);
+  };
+
+  // Handle location selection - can be called from location picker screen/modal
+  const handleLocationSelect = useCallback(location => {
+    console.log('handleLocationSelect called with:', location);
+    setLocationSelected(true);
+    methodSetupAccountRequest('currentLocation', location);
+  }, []);
+
+  // Handle location selection callback from LocationPicker screen
+  const handleLocationPickerResult = useCallback(
+    (currentLocation, lat, lng, city, state, pincode, area) => {
+      console.log('=== handleLocationPickerResult called ===');
+      console.log('currentLocation:', currentLocation);
+      console.log('lat:', lat);
+      console.log('lng:', lng);
+      console.log('city:', city);
+      console.log('state:', state);
+      console.log('pincode:', pincode);
+      console.log('area:', area);
+
+      // Update currentLocation first
+      if (currentLocation) {
+        handleLocationSelect(currentLocation);
+        methodSetupAccountRequest('currentLocation', currentLocation);
+      }
+
+      // Set location details
+      if (lat) {
+        setLat(String(lat));
+        methodSetupAccountRequest('lat', String(lat));
+      }
+      if (lng) {
+        setLng(String(lng));
+        methodSetupAccountRequest('lng', String(lng));
+      }
+      if (city) {
+        setLocationCity(city);
+        methodSetupAccountRequest('city', city);
+      }
+      if (state) {
+        setLocationState(state);
+        methodSetupAccountRequest('state', state);
+      }
+      if (pincode) {
+        setPincode(pincode);
+        methodSetupAccountRequest('pincode', pincode);
+      }
+      if (area) {
+        setArea(area);
+      }
+    },
+    [handleLocationSelect],
+  );
+
+  // Handle gender selection
+  const handleGenderSelect = genderValue => {
+    methodSetupAccountRequest('gender', genderValue);
+    setFocusedInput('gender');
+    setLocationSelected(true);
+  };
+
+  // Custom validation for gender
+  const validateGender = () => {
+    if (!accountReq.gender) {
+      let dic = {...accountReq};
+      dic.validators.gender.error = 'Please select your gender';
+      setAccountReq(dic);
+      return false;
+    }
+    return true;
   };
 
   const methodApi = async ResData => {
@@ -478,32 +620,16 @@ const Register = ({navigation}) => {
                 <View style={styles.credContainer}>
                   <View style={styles.fieldContainer}>
                     <CommonTextInputs
-                      placeholder="Your Name"
+                      placeholder="Full Name"
                       keyboardType={'default'}
                       returnKeyType={'done'}
-                      paddingLeft={10}
+                      paddingLeft={15}
                       onChangeText={value => {
                         methodSetupAccountRequest('fullName', value);
                       }}
                       value={accountReq?.fullName}
                       maxLength={50}
                       isErrorMsg={accountReq.validators.fullName.error}
-                      errorFontSize={12}
-                    />
-                  </View>
-
-                  <View style={styles.fieldContainer}>
-                    <CommonTextInputs
-                      placeholder="Email"
-                      keyboardType={'email-address'}
-                      returnKeyType={'done'}
-                      paddingLeft={10}
-                      onChangeText={value => {
-                        methodSetupAccountRequest('emailID', value);
-                      }}
-                      value={accountReq?.emailID}
-                      maxLength={50}
-                      isErrorMsg={accountReq.validators.emailID.error}
                       errorFontSize={12}
                     />
                   </View>
@@ -529,7 +655,130 @@ const Register = ({navigation}) => {
                       />
                     </View>
                   </View>
+                  <View style={styles.fieldContainer}>
+                    <CommonTextInputs
+                      placeholder="Email"
+                      keyboardType={'email-address'}
+                      returnKeyType={'done'}
+                      paddingLeft={10}
+                      onChangeText={value => {
+                        methodSetupAccountRequest('emailID', value);
+                      }}
+                      value={accountReq?.emailID}
+                      maxLength={50}
+                      isErrorMsg={accountReq.validators.emailID.error}
+                      errorFontSize={12}
+                    />
+                  </View>
 
+                  {/* Current Location Field */}
+                  <View style={styles.fieldContainer}>
+                    <Pressable
+                      style={styles.locationInput}
+                      onPress={() => {
+                        navigation.navigate('LocationPicker', {
+                          currentLocation: accountReq?.currentLocation || '',
+                          onLocationSelect: handleLocationPickerResult,
+                        });
+                      }}>
+                      <View style={styles.locationTextContainer}>
+                        <Text
+                          style={[
+                            styles.locationInputText,
+                            !accountReq?.currentLocation &&
+                              styles.locationPlaceholder,
+                          ]}>
+                          {accountReq?.currentLocation || 'Current Location'}
+                        </Text>
+                        {(locationCity || locationState || area) && (
+                          <Text style={styles.locationSubText}>
+                            {[locationCity, area, locationState]
+                              .filter(Boolean)
+                              .join(', ')}
+                          </Text>
+                        )}
+                      </View>
+                    </Pressable>
+                    {accountReq.validators.currentLocation.error ? (
+                      <Text style={styles.errorText}>
+                        {accountReq.validators.currentLocation.error}
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  {/* Date of Birth Field */}
+                  <View style={styles.fieldContainer}>
+                    <Pressable
+                      style={styles.dateInput}
+                      onPress={() => {
+                        // If dateOfBirth exists, parse it to set selectedDate
+                        if (accountReq?.dateOfBirth) {
+                          const parts = accountReq.dateOfBirth.split('/');
+                          if (parts.length === 3) {
+                            const day = parseInt(parts[0], 10);
+                            const month = parseInt(parts[1], 10) - 1;
+                            const year = parseInt(parts[2], 10);
+                            setSelectedDate(new Date(year, month, day));
+                          }
+                        }
+                        setDatePickerOpen(true);
+                        setFocusedInput('dateOfBirth');
+                        setLocationSelected(true);
+                      }}>
+                      <Text
+                        style={[
+                          styles.dateInputText,
+                          !accountReq?.dateOfBirth && styles.datePlaceholder,
+                        ]}>
+                        {accountReq?.dateOfBirth || 'Date of Birth'}
+                      </Text>
+                    </Pressable>
+                    {accountReq.validators.dateOfBirth.error ? (
+                      <Text style={styles.errorText}>
+                        {accountReq.validators.dateOfBirth.error}
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  {/* Gender Selection Field */}
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.label}>Gender</Text>
+                    <View style={styles.genderGroup}>
+                      {[
+                        {label: 'Male', value: '1'},
+                        {label: 'Female', value: '2'},
+                        {label: 'Other', value: '3'},
+                      ].map(option => {
+                        const isActive = accountReq.gender === option.value;
+                        return (
+                          <Pressable
+                            key={option.value}
+                            style={styles.genderOption}
+                            onPress={() => handleGenderSelect(option.value)}>
+                            <View
+                              style={[
+                                styles.outerCircle,
+                                isActive && styles.outerCircleActive,
+                              ]}>
+                              {isActive && <View style={styles.innerDot} />}
+                            </View>
+                            <Text
+                              style={[
+                                styles.genderLabel,
+                                isActive && styles.genderLabelActive,
+                              ]}>
+                              {option.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    {accountReq.validators.gender.error ? (
+                      <Text style={styles.errorText}>
+                        {accountReq.validators.gender.error}
+                      </Text>
+                    ) : null}
+                  </View>
                   <View style={styles.fieldContainer}>
                     <CommonTextInputs
                       placeholder="Refer Code (Optional)"
@@ -733,6 +982,25 @@ const Register = ({navigation}) => {
           </View>
         </View>
       </KeyboardScroll>
+
+      {/* Date Picker Modal */}
+      {datePickerOpen && (
+        <DatePicker
+          modal
+          title={'Select date of birth'}
+          mode="date"
+          open={datePickerOpen}
+          date={selectedDate}
+          onConfirm={handleDateConfirm}
+          onCancel={() => {
+            setDatePickerOpen(false);
+            setFocusedInput(null);
+          }}
+          theme="light"
+          maximumDate={new Date()}
+          buttonColor={'#FF8D53'}
+        />
+      )}
     </View>
   );
 };
@@ -748,7 +1016,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
-
     justifyContent: 'center',
   },
   // card: {
@@ -757,7 +1024,7 @@ const styles = StyleSheet.create({
   //   borderRadius: 10,
   //   padding: 20,
   //   shadowColor: '#000',
-  //   shadowOffset: { width: 0, height: 2 },
+  //   shadowOffset: {width: 0, height: 2},
   //   shadowOpacity: 0.1,
   //   shadowRadius: 8,
   //   elevation: 5,
@@ -1090,6 +1357,114 @@ const styles = StyleSheet.create({
   buttonBase: {
     // Base style for the custom Button component
     // Defined in continuesavebtn and applybtn
+  },
+  // New styles for Location, Date, and Gender fields
+  label: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  locationInput: {
+    borderRadius: 10,
+    alignSelf: 'center',
+    alignItems: 'center',
+    marginHorizontal: 1,
+    height: 55,
+    backgroundColor: 'white',
+    flexDirection: 'row',
+    paddingHorizontal: 18,
+    marginVertical: 5,
+    borderColor: '#C7CACB',
+    borderWidth: 1,
+    justifyContent: 'flex-start',
+  },
+  locationTextContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  locationInputText: {
+    fontSize: 16,
+    color: '#000',
+    paddingHorizontal: 11,
+    fontFamily: fonts.Montserrat_Regular,
+  },
+  locationPlaceholder: {
+    color: '#BABFC7',
+  },
+  locationSubText: {
+    fontSize: 12,
+    color: '#666',
+    paddingHorizontal: 11,
+    marginTop: 2,
+    fontFamily: fonts.Montserrat_Regular,
+  },
+  dateInput: {
+    borderRadius: 10,
+    alignSelf: 'center',
+    alignItems: 'center',
+    marginHorizontal: 1,
+    height: 55,
+    backgroundColor: 'white',
+    flexDirection: 'row',
+    paddingHorizontal: 18,
+    marginVertical: 5,
+    borderColor: '#C7CACB',
+    borderWidth: 1,
+    justifyContent: 'flex-start',
+  },
+  dateInputText: {
+    fontSize: 16,
+    color: '#000',
+    flex: 1,
+    paddingHorizontal: 11,
+  },
+  datePlaceholder: {
+    color: '#BABFC7',
+  },
+  genderGroup: {
+    flexDirection: 'row',
+    marginVertical: 8,
+    gap: 16,
+  },
+  genderOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  outerCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#585858',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  outerCircleActive: {
+    borderColor: '#FF8D53',
+  },
+  innerDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FF8D53',
+  },
+  genderLabel: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '400',
+  },
+  genderLabelActive: {
+    color: '#FF8D53',
+    fontWeight: '500',
+  },
+  errorText: {
+    fontFamily: fonts.Montserrat_Regular,
+    fontSize: fonts.SIZE_17,
+    color: '#E01E61',
+    marginHorizontal: 20,
+    bottom: 2,
   },
 });
 
