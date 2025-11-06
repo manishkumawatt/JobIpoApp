@@ -33,6 +33,9 @@ import {loadingShow} from '../../appRedux/actions/loadingAction';
 import DatePicker from 'react-native-date-picker';
 import {kAddress, kDob} from '../../utils/validation/validationValues';
 import fonts from '../../theme/fonts';
+import SmsRetriever, {
+  useSMSRetriever,
+} from '@ebrimasamba/react-native-sms-retriever';
 
 // Dummy Button Component (Replace with your actual Button component if you have one)
 const Button = ({onPress, text, style}) => (
@@ -110,10 +113,10 @@ const Register = ({navigation, route}) => {
 
   const [accountReq, setAccountReq] = useState({
     fullName: '',
-    emailID: '',
-    contactNumber: '',
-    uniqueCode: '',
-    currentLocation: '',
+    email: '',
+    mobile: '',
+    referCode: '',
+    current_location: '',
     dateOfBirth: '',
     gender: '1', // Default to Male
     lat: '',
@@ -127,17 +130,17 @@ const Register = ({navigation, route}) => {
         error: '',
         required: true,
       },
-      emailID: {
+      email: {
         type: 'email',
         error: '',
         required: true,
       },
-      contactNumber: {
+      mobile: {
         type: 'mobile_number',
         error: '',
         required: true,
       },
-      currentLocation: {
+      current_location: {
         type: kAddress,
         error: '',
         required: true,
@@ -157,7 +160,42 @@ const Register = ({navigation, route}) => {
       // },
     },
   });
+  // Safe SMS retriever implementation with error handling
+  const smsRetrieverData = useSMSRetriever();
+  const {appHash, smsCode} = smsRetrieverData || {};
 
+  // Safe logging with null checks
+  if (__DEV__) {
+    console.log('appHash----login', appHash);
+    // console.log('smsCode----', smsCode);
+  }
+
+  // Safe SMS retriever start function
+  // Note: SMS Retriever API doesn't require SMS permissions
+  const startSmsRetriever = async () => {
+    if (Platform.OS !== 'android') return;
+
+    try {
+      await SmsRetriever.startSmsRetriever();
+      if (__DEV__) {
+        console.log('SMS retriever started successfully login');
+      }
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('Failed to start SMS retriever:', error);
+      }
+    }
+  };
+  useEffect(() => {
+    startSmsRetriever();
+
+    // Fallback: Retry SMS retriever after 2 seconds if it fails initially
+    const retryTimeout = setTimeout(() => {
+      startSmsRetriever();
+    }, 2000);
+
+    return () => clearTimeout(retryTimeout);
+  }, []);
   const CreateUser = async () => {
     // Clone to avoid in-place mutation blocking React re-render
     const formCopy = JSON.parse(JSON.stringify(accountReq));
@@ -172,15 +210,16 @@ const Register = ({navigation, route}) => {
     // // console.log('accountReq', accountReq);
     if (validForm.status) {
       Keyboard.dismiss();
+
       let dic = {...accountReq};
       delete dic.validators;
 
       let obj = {
         fullName: accountReq?.fullName,
-        email: accountReq?.emailID,
-        mobile: accountReq?.contactNumber,
-        referCode: accountReq?.uniqueCode,
-        current_location: accountReq?.currentLocation,
+        email: accountReq?.email,
+        mobile: accountReq?.mobile,
+        referCode: accountReq?.referCode,
+        current_location: accountReq?.current_location,
         lat: accountReq?.lat || lat,
         lng: accountReq?.lng || lng,
         city: accountReq?.city || locationCity,
@@ -190,8 +229,10 @@ const Register = ({navigation, route}) => {
         gender: accountReq?.gender,
         notificationConsent: 1,
         is_sms_enable: terms ? 1 : 0,
+        appHash: appHash,
       };
-      console.log('obj', obj);
+      console.log('obj==1==1=', obj);
+
       // dispatch(loadingShow(true));
       // try {
       //   const ResData = await fetch(
@@ -225,12 +266,11 @@ const Register = ({navigation, route}) => {
       // } finally {
       //   dispatch(loadingShow(false));
       // }
-      return;
       dispatch(checkUserApi(obj)).then(response => {
         if (response?.success) {
-          // // console.log('responseresponse', response);
-          navigation.navigate('OtpScreen', {registerObj: obj});
-          // methodApi(response);
+          console.log('responseresponse', response);
+          // navigation.navigate('OtpScreen', {registerObj: obj});
+          methodApi(response);
         }
       });
     }
@@ -266,14 +306,14 @@ const Register = ({navigation, route}) => {
   const handleLocationSelect = useCallback(location => {
     console.log('handleLocationSelect called with:', location);
     setLocationSelected(true);
-    methodSetupAccountRequest('currentLocation', location);
+    methodSetupAccountRequest('current_location', location);
   }, []);
 
   // Handle location selection callback from LocationPicker screen
   const handleLocationPickerResult = useCallback(
-    (currentLocation, lat, lng, city, state, pincode, area) => {
+    (current_location, lat, lng, city, state, pincode, area) => {
       console.log('=== handleLocationPickerResult called ===');
-      console.log('currentLocation:', currentLocation);
+      console.log('current_location:', current_location);
       console.log('lat:', lat);
       console.log('lng:', lng);
       console.log('city:', city);
@@ -282,9 +322,9 @@ const Register = ({navigation, route}) => {
       console.log('area:', area);
 
       // Update currentLocation first
-      if (currentLocation) {
-        handleLocationSelect(currentLocation);
-        methodSetupAccountRequest('currentLocation', currentLocation);
+      if (current_location) {
+        handleLocationSelect(current_location);
+        methodSetupAccountRequest('current_location', current_location);
       }
 
       // Set location details
@@ -336,13 +376,13 @@ const Register = ({navigation, route}) => {
   const methodApi = async ResData => {
     setIsOtpSent(true);
     setTimer(30);
-    // // console.log('methodApi', ResData);
+    console.log('methodApi', ResData);
     await AsyncStorage.setItem('Token', String(ResData.token));
-    await AsyncStorage.setItem('ContactNumber', String(contactNumber));
+    await AsyncStorage.setItem('mobile', String(accountReq?.mobile));
 
     const storedUserId = await AsyncStorage.getItem('UserID');
     const storedToken = await AsyncStorage.getItem('Token');
-    const storedContactNumber = await AsyncStorage.getItem('ContactNumber');
+    const storedContactNumber = await AsyncStorage.getItem('mobile');
     // // console.log('Saved userId in AsyncStorage:', storedUserId);
     // // console.log('Saved storedToken in AsyncStorage:', storedToken);
     // // console.log('Saved contactNumber in AsyncStorage:', storedContactNumber);
@@ -376,29 +416,48 @@ const Register = ({navigation, route}) => {
     }
 
     const formdata = {
-      contact_number: contactNumber,
+      mobile: accountReq?.mobile,
       otp: enteredOtp,
+      userData: {
+        fullName: accountReq?.fullName,
+        email: accountReq?.email,
+        mobile: accountReq?.mobile,
+        referCode: accountReq?.referCode,
+        notificationConsent: 1,
+        current_location: accountReq?.current_location,
+        lat: accountReq?.lat || lat,
+        lng: accountReq?.lng || lng,
+        city: accountReq?.city || locationCity,
+        state: accountReq?.state || locationState,
+        pincode: accountReq?.pincode || pincode,
+        dob: accountReq?.dateOfBirth,
+        gender: accountReq?.gender,
+      },
     };
-
+    console.log('formdata----', formdata);
     // // console.log('FormData being sent to verify-otp API:', formdata);
 
     try {
-      const ResData = await fetch('https://jobipo.com/api/verify-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const ResData = await fetch(
+        'https://jobipo.com/api/v3/candidate-verify-otp',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          },
+          body: JSON.stringify(formdata),
         },
-        body: JSON.stringify(formdata),
-      }).then(res => res.json());
+      ).then(res => res.json());
 
-      // // console.log('checkOtp response:', ResData);
+      console.log('checkOtp response:', ResData);
 
-      if (ResData.type === 'success') {
+      if (ResData?.success) {
         // Alert.alert('OTP Verified Successfully');
-        navigation.navigate('RegistrationP');
+        navigation.navigate('RegistrationP', {fromOtpParam: ResData});
         return true;
       } else {
-        showToastMessage(ResData.msg || 'Invalid OTP.');
+        showToastMessage(ResData?.message || 'Invalid OTP.');
         return false;
       }
     } catch (err) {
@@ -505,35 +564,64 @@ const Register = ({navigation, route}) => {
     dispatch(loadingShow(true));
     let obj = {
       fullName: accountReq?.fullName,
-      emailID: accountReq?.emailID,
-      contactNumber: accountReq?.contactNumber,
-      uniqueCode: accountReq?.uniqueCode,
+      email: accountReq?.email,
+      mobile: accountReq?.mobile,
+      referCode: accountReq?.referCode,
+      current_location: accountReq?.current_location,
+      lat: accountReq?.lat || lat,
+      lng: accountReq?.lng || lng,
+      city: accountReq?.city || locationCity,
+      state: accountReq?.state || locationState,
+      pincode: accountReq?.pincode || pincode,
+      dob: accountReq?.dateOfBirth,
+      gender: accountReq?.gender,
+      notificationConsent: 1,
+      is_sms_enable: terms ? 1 : 0,
+      appHash: appHash,
     };
-    try {
-      const ResData = await fetch('https://jobipo.com/api/Singup/sendOtp', {
-        // Note: 'Singup' typo in your original URL
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(obj),
-      }).then(res => res.json());
+    console.log('obj-=-=-=-=--=', obj);
+    dispatch(checkUserApi(obj)).then(response => {
       dispatch(loadingShow(false));
-      // // console.log('sendOtp (resend) response:', ResData);
-      if (ResData && ResData.status === 1) {
-        setRotp(ResData.msg); // Store the OTP received from server (if your server returns it)
+      console.log('responseresponse', response);
+
+      if (response?.success) {
+        setRotp(response.userData); // Store the OTP received from server (if your server returns it)
         setTimer(30); // Reset timer for resend
         setIsOtpSent(true); // Ensure OTP section is visible
         setotp(['', '', '', '']); // Clear previous OTP digits
-        showToastMessage(ResData?.msg || 'OTP sent successfully.', 'success'); // Confirm OTP sent
+        dispatch(loadingShow(false));
       } else {
         dispatch(loadingShow(false));
-        showToastMessage(ResData?.msg || 'Failed to resend OTP.');
       }
-    } catch (err) {
-      dispatch(loadingShow(false));
-      // // console.log('sendOtp (resend) error:', err);
-    }
+    });
+    // try {
+    //   const ResData = await fetch(
+    //     'https://jobipo.com/api/v3/candidate-sign-send-otp',
+    //     {
+    //       // Note: 'Singup' typo in your original URL
+    //       method: 'POST',
+    //       headers: {
+    //         'Content-Type': 'application/json',
+    //       },
+    //       body: JSON.stringify(obj),
+    //     },
+    //   ).then(res => res.json());
+    //   dispatch(loadingShow(false));
+    //   // // console.log('sendOtp (resend) response:', ResData);
+    //   if (ResData && ResData.status === 1) {
+    //     setRotp(ResData.msg); // Store the OTP received from server (if your server returns it)
+    //     setTimer(30); // Reset timer for resend
+    //     setIsOtpSent(true); // Ensure OTP section is visible
+    //     setotp(['', '', '', '']); // Clear previous OTP digits
+    //     showToastMessage(ResData?.msg || 'OTP sent successfully.', 'success'); // Confirm OTP sent
+    //   } else {
+    //     dispatch(loadingShow(false));
+    //     showToastMessage(ResData?.msg || 'Failed to resend OTP.');
+    //   }
+    // } catch (err) {
+    //   dispatch(loadingShow(false));
+    //   // // console.log('sendOtp (resend) error:', err);
+    // }
   };
 
   // Timer useEffect with animation
@@ -645,12 +733,12 @@ const Register = ({navigation, route}) => {
                         returnKeyType={'done'}
                         paddingLeft={10}
                         onChangeText={value => {
-                          methodSetupAccountRequest('contactNumber', value);
+                          methodSetupAccountRequest('mobile', value);
                         }}
-                        fontSize={accountReq?.contactNumber ? 15 : 14}
-                        value={accountReq?.contactNumber}
+                        fontSize={accountReq?.mobile ? 15 : 14}
+                        value={accountReq?.mobile}
                         maxLength={10}
-                        isErrorMsg={accountReq.validators.contactNumber.error}
+                        isErrorMsg={accountReq.validators.mobile.error}
                         errorFontSize={12}
                       />
                     </View>
@@ -662,11 +750,11 @@ const Register = ({navigation, route}) => {
                       returnKeyType={'done'}
                       paddingLeft={10}
                       onChangeText={value => {
-                        methodSetupAccountRequest('emailID', value);
+                        methodSetupAccountRequest('email', value);
                       }}
-                      value={accountReq?.emailID}
+                      value={accountReq?.email}
                       maxLength={50}
-                      isErrorMsg={accountReq.validators.emailID.error}
+                      isErrorMsg={accountReq.validators.email.error}
                       errorFontSize={12}
                     />
                   </View>
@@ -677,31 +765,33 @@ const Register = ({navigation, route}) => {
                       style={styles.locationInput}
                       onPress={() => {
                         navigation.navigate('LocationPicker', {
-                          currentLocation: accountReq?.currentLocation || '',
+                          current_location: accountReq?.current_location || '',
                           onLocationSelect: handleLocationPickerResult,
                         });
                       }}>
                       <View style={styles.locationTextContainer}>
                         <Text
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
                           style={[
                             styles.locationInputText,
-                            !accountReq?.currentLocation &&
+                            !accountReq?.current_location &&
                               styles.locationPlaceholder,
                           ]}>
-                          {accountReq?.currentLocation || 'Current Location'}
+                          {accountReq?.current_location || 'Current Location'}
                         </Text>
-                        {(locationCity || locationState || area) && (
+                        {/* {(locationCity || locationState || area) && (
                           <Text style={styles.locationSubText}>
                             {[locationCity, area, locationState]
                               .filter(Boolean)
                               .join(', ')}
                           </Text>
-                        )}
+                        )} */}
                       </View>
                     </Pressable>
-                    {accountReq.validators.currentLocation.error ? (
+                    {accountReq.validators.current_location.error ? (
                       <Text style={styles.errorText}>
-                        {accountReq.validators.currentLocation.error}
+                        {accountReq.validators.current_location.error}
                       </Text>
                     ) : null}
                   </View>
@@ -786,10 +876,10 @@ const Register = ({navigation, route}) => {
                       returnKeyType={'done'}
                       paddingLeft={10}
                       onChangeText={value => {
-                        methodSetupAccountRequest('uniqueCode', value);
+                        methodSetupAccountRequest('referCode', value);
                       }}
-                      fontSize={accountReq?.uniqueCode ? 15 : 14}
-                      value={accountReq?.uniqueCode}
+                      fontSize={accountReq?.referCode ? 15 : 14}
+                      value={accountReq?.referCode}
                       maxLength={50}
                       errorFontSize={12}
                     />
@@ -892,7 +982,7 @@ const Register = ({navigation, route}) => {
                     </Text>
                     <View style={styles.phoneNumberContainer}>
                       <Text style={styles.phoneNumber}>
-                        +91 - {accountReq?.contactNumber}
+                        +91 - {accountReq?.mobile}
                       </Text>
                       <Pressable
                         style={styles.editButton}

@@ -306,24 +306,6 @@ export default function EditEducation({navigation, route}) {
             <View style={{height: 20}} />
           )}
 
-          {/* <Text style={styles.label}>Year of Completion</Text>
-                  <DropDownPicker
-                  open={openYear}
-                  value={educationData.yearOfCompletion}
-                  items={[...Array(60)].map((_, i) => {
-                    const year = `${new Date().getFullYear() - i}`; 
-                    return { label: year, value: year };
-                  })}
-                  setOpen={setOpenYear}
-                  setValue={(callback) =>
-                    setEducationData((prev) => ({
-                      ...prev,
-                      yearOfCompletion: callback(prev.yearOfCompletion),
-                    }))
-                  }
-                  placeholder="Select Year of Completion"
-                  searchable={true}
-                  /> */}
           <Text style={styles.label}>Year of Completion</Text>
           <TextInput
             style={styles.input}

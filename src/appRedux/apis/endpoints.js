@@ -1,5 +1,5 @@
 const LOGIN = 'login';
-const CHECK_USER = 'v3/sign-up-process';
+const CHECK_USER = 'v3/candidate-sign-send-otp';
 const REGISTER = 'register';
 const STORE_TOKEN = 'v3/store-token';
 const SETUP_PROFILE = 'setup-profile';

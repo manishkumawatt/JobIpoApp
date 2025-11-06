@@ -128,6 +128,7 @@ const OtpScreen = ({route, navigation}) => {
   };
 
   const Submit = async (autoOtp = null) => {
+    console.log('submit----', registerObj);
     const currentOtp = autoOtp || otp.join('');
     const formdata = {
       username,
@@ -140,25 +141,14 @@ const OtpScreen = ({route, navigation}) => {
       mobile: registerObj?.mobile,
       otp: currentOtp,
       appHash: appHash,
-      userData: {
-        fullName: registerObj?.fullName,
-        email: registerObj?.email,
-        mobile: registerObj?.mobile,
-        referCode: registerObj?.referCode,
-        notificationConsent: 1,
-      },
+      ...registerObj,
     };
-    let obj = {
-      fullName: registerObj?.fullName,
-      emailID: registerObj?.email,
-      contactNumber: registerObj?.mobile,
-      referCode: registerObj?.referCode,
-      otp: currentOtp,
-    };
+
+    console.log('1902021091290109', dic);
     if (registerObj) {
       try {
         const ResData = await fetch(
-          'https://jobipo.com/api/v3/verify-sign-up-process-otp',
+          'https://jobipo.com/api/v3/candidate-verify-otp',
           {
             method: 'POST',
             headers: {
@@ -176,7 +166,7 @@ const OtpScreen = ({route, navigation}) => {
           }
           showToastMessage(response?.message, 'success');
 
-          navigation.navigate('RegistrationP');
+          navigation.navigate('RegistrationP', {fromOtpParam: response});
           return true;
         } else {
           showToastMessage(response?.message || 'Invalid OTP.');

@@ -20,6 +20,7 @@ function useDebounce(value, delay) {
 }
 
 export default function PlacesAutocomplete({
+  hideBorder = false,
   apiKey,
   onPlaceSelected,
   placeholder = 'Search Location',
@@ -263,7 +264,15 @@ export default function PlacesAutocomplete({
   };
   return (
     <View style={styles.container}>
-      <View style={styles.pickerWrapper}>
+      <View
+        style={[
+          styles.pickerWrapper,
+          {
+            height: hideBorder ? 45 : 55,
+            borderWidth: hideBorder ? 0 : 1,
+            borderColor: hideBorder ? 'transparent' : '#C7CACB',
+          },
+        ]}>
         <TextInput
           style={styles.input}
           placeholder={placeholder}
@@ -349,10 +358,12 @@ const styles = StyleSheet.create({
   pickerWrapper: {
     backgroundColor: '#ffffff',
     borderRadius: 8,
-    height: 45,
+    height: 55,
     width: '100%',
     overflow: 'hidden',
     justifyContent: 'center',
     marginVertical: 10,
+
+    borderColor: '#C7CACB',
   },
 });

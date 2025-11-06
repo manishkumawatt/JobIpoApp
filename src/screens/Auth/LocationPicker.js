@@ -22,6 +22,7 @@ import Geolocation from '@react-native-community/geolocation';
 import {Platform} from 'react-native';
 import {check, request, PERMISSIONS, RESULTS} from 'react-native-permissions';
 import {useFocusEffect} from '@react-navigation/native';
+import PlacesAutocomplete from '../../components/PlacesAutocomplete';
 
 const LocationPicker = ({navigation, route}) => {
   const dispatch = useDispatch();
@@ -32,7 +33,10 @@ const LocationPicker = ({navigation, route}) => {
   const [showCityModal, setShowCityModal] = useState(false);
   const [citySearchQuery, setCitySearchQuery] = useState('');
   const [filteredCities, setFilteredCities] = useState([]);
-
+  const [selectedState, setSelectedState] = useState('');
+  const [selectedPincode, setSelectedPincode] = useState('');
+  const [locationSelected, setLocationSelected] = useState(false);
+  const [focusedInput, setFocusedInput] = useState(null);
   // API data
   const [cities, setCities] = useState([]);
   const [states, setStates] = useState([]);
@@ -118,8 +122,8 @@ const LocationPicker = ({navigation, route}) => {
 
   useEffect(() => {
     // Set initial values from route params if needed
-    if (route?.params?.currentLocation) {
-      const locationParts = route.params.currentLocation.split(',');
+    if (route?.params?.current_location) {
+      const locationParts = route.params.current_location.split(',');
       if (locationParts.length >= 2) {
         setCity(locationParts[0]?.trim() || '');
         setArea(locationParts.slice(1).join(',').trim() || '');
@@ -373,11 +377,37 @@ const LocationPicker = ({navigation, route}) => {
         stateName, // state
         '', // pincode - not available from manual selection
         area, // area
+        selectedState, // state
+        selectedPincode, // pincode
       );
     }
     navigation.goBack();
   };
 
+  // Helper function to extract pincode from address string
+  const extractPincodeFromAddress = address => {
+    if (!address) return '';
+
+    const patterns = [
+      /\b\d{6}\b/g, // 6 digits
+      /\b\d{5,6}\b/g, // 5-6 digits
+      /pincode[:\s]*(\d{6})/i, // "pincode: 123456"
+      /pin[:\s]*(\d{6})/i, // "pin: 123456"
+      /(\d{6})/g, // any 6 digits
+    ];
+
+    for (const pattern of patterns) {
+      const matches = address.match(pattern);
+      if (matches && matches.length > 0) {
+        const sixDigitMatch = matches.find(match => match.length === 6);
+        if (sixDigitMatch) {
+          return sixDigitMatch;
+        }
+      }
+    }
+
+    return '';
+  };
   return (
     <>
       {/* Custom Overlay Modal - Using absolute positioning instead of Modal */}
@@ -551,7 +581,41 @@ const LocationPicker = ({navigation, route}) => {
             {/* Area Input */}
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>Enter Your Area</Text>
-              <CommonTextInputs
+              <PlacesAutocomplete
+                apiKey={'AIzaSyDqBEtr9Djdq0b9NTCMmquSrKiPCCv384o'}
+                onPlaceSelected={(address, placeId, val) => {
+                  // Extract state and pincode with fallbacks
+                  const extractedState = val.state || '';
+                  const extractedPincode =
+                    val.pincode || extractPincodeFromAddress(address);
+
+                  setSelectedState(extractedState);
+                  setSelectedPincode(extractedPincode);
+                  setLocationSelected(true);
+                  setArea(val.Locality);
+                  setFormData({
+                    ...formData,
+                    current_location: val.Locality,
+                    cllat: val.lat,
+                    cllng: val.lng,
+                    city: val?.city,
+                    state: extractedState,
+                    pincode: extractedPincode,
+                  });
+                }}
+                showSuggestions={
+                  focusedInput === 'location' && !locationSelected
+                }
+                onFocus={() => {
+                  setFocusedInput('location');
+                  // If location is already selected, allow editing by resetting the selection
+                  if (locationSelected) {
+                    setLocationSelected(false);
+                  }
+                }}
+                onBlur={() => setFocusedInput(null)}
+              />
+              {/* <CommonTextInputs
                 placeholder="Enter your area, locality, or street"
                 keyboardType={'default'}
                 returnKeyType={'done'}
@@ -559,7 +623,7 @@ const LocationPicker = ({navigation, route}) => {
                 onChangeText={value => setArea(value)}
                 value={area}
                 maxLength={100}
-              />
+              /> */}
             </View>
 
             {/* Submit Button */}

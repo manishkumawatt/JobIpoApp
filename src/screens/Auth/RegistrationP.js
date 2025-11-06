@@ -1,5 +1,5 @@
 import React, {useState, useEffect, useCallback} from 'react';
-import {BackHandler, Keyboard, Platform} from 'react-native';
+import {BackHandler, Keyboard, Modal, Platform} from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
 import {
   View,
@@ -27,21 +27,50 @@ const RegistrationP = ({navigation, route}) => {
   // const jobSeekerData = route.params || {};
   const [formData, setFormData] = useState({
     userId: '',
-    current_location: '',
-    cllat: '',
-    cllng: '',
-    city: '',
-    state: '',
-    pincode: '',
-    dob: '',
-    gender: '',
+    appHash: '',
     education_level: '',
     jobTitle: '',
     preferred_job_industry: '',
+    collegeName: '',
+    degree: '',
+    yearOfCompletion: '',
   });
-
+  const {fromOtpParam} = route?.params || {};
   const isDarkMode = useColorScheme() === 'dark';
 
+  useFocusEffect(
+    useCallback(() => {
+      const GetDataFunc = async () => {
+        const langData = await fetch(`https://jobipo.com/api/v2/job-data`, {
+          method: 'GET',
+        }).then(res => res.json());
+
+        const list = JSON.parse(
+          JSON.parse(JSON.stringify(langData)).msg,
+        ).skill?.map(item => item.skill);
+        //  // console.log("list",list)
+        setFormData(prevData => ({
+          skills: list,
+        }));
+      };
+
+      let mount = true;
+      if (mount) {
+        GetDataFunc();
+      }
+
+      return () => {
+        mount = false;
+      };
+    }, []),
+  );
+  function searchInArray(input, array) {
+    if (!input) return []; // Return empty if input is empty
+
+    const regex = new RegExp(input, 'i'); // case-insensitive match
+
+    return array.filter(item => regex.test(item));
+  }
   // useFocusEffect(
   //   useCallback(() => {
   //     const fetchUserId = async () => {
@@ -64,20 +93,105 @@ const RegistrationP = ({navigation, route}) => {
   //     fetchUserId();
   //   }, [])
   // );
+  const data = route.params;
 
+  // const [selectedSkills, setSelectedSkills] = useState(JSON.parse(data?.skills) || []);
+  const [open, setOpen] = useState(false);
+  const [currentSalary, setCurrentSalary] = useState('');
+  const [englishSpeaking, setEnglishSpeaking] = useState('');
+  const [skill, setSkill] = useState('');
+
+  const [selectedSkills, setSelectedSkills] = useState(() => {
+    try {
+      return typeof data?.skills === 'string'
+        ? JSON.parse(data.skills)
+        : data.skills || [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // Function to get related skills based on selected skills
+  const getRelatedSkills = (selected, allSkills) => {
+    if (!allSkills || allSkills.length === 0) return [];
+
+    // If no skills selected, return popular/common skills (first 20)
+    if (selected.length === 0) {
+      return allSkills.slice(0, 20);
+    }
+
+    // Get the last selected skill to find related ones
+    const lastSelected = selected[selected.length - 1].toLowerCase();
+
+    // Find skills that contain the selected skill name or are similar
+    const related = allSkills.filter(skill => {
+      const skillLower = skill.toLowerCase();
+      // Check if skill contains the selected skill or vice versa
+      return (
+        skillLower.includes(lastSelected) ||
+        lastSelected.includes(skillLower) ||
+        skillLower.startsWith(lastSelected.substring(0, 3))
+      );
+    });
+
+    // If we have related skills, return them, otherwise return popular ones
+    return related.length > 0 ? related.slice(0, 20) : allSkills.slice(0, 20);
+  };
+
+  // Function to get available skills (not selected)
+  const getAvailableSkills = (searchText, allSkills, selected) => {
+    if (!allSkills || allSkills.length === 0) return [];
+
+    // Filter out already selected skills
+    let available = allSkills.filter(s => !selected.includes(s));
+
+    // If there's a search text, filter by it
+    if (searchText && searchText.trim().length > 0) {
+      const regex = new RegExp(searchText, 'i');
+      available = available.filter(item => regex.test(item));
+    } else {
+      // If no search text, show related skills or popular ones
+      available = getRelatedSkills(selected, available);
+    }
+
+    return available.slice(0, 20);
+  };
+
+  // Function to add a skill
+  const addSkill = skillToAdd => {
+    if (!skillToAdd || skillToAdd.trim() === '') {
+      return;
+    }
+
+    const trimmedSkill = skillToAdd.trim();
+
+    // Check if already selected
+    if (selectedSkills.includes(trimmedSkill)) {
+      return;
+    }
+
+    // Check limit
+    if (selectedSkills.length >= 10) {
+      showToastMessage('You can add up to 10 skills only.', 'danger');
+      return;
+    }
+
+    setSelectedSkills([...selectedSkills, trimmedSkill]);
+    setSkill('');
+    setOpen(false);
+  };
+
+  // Function to remove a skill
+  const removeSkill = skillToRemove => {
+    setSelectedSkills(prev => prev.filter(s => s !== skillToRemove));
+  };
   useFocusEffect(
     useCallback(() => {
       setFormData({
         userId: '',
-        current_location: '',
-        cllat: '',
-        cllng: '',
-        city: '',
-        state: '',
-        pincode: '',
-        dob: '',
-        gender: '',
+        appHash: '',
         education_level: '',
+        collegeName: '',
         jobTitle: '',
         preferred_job_industry: '',
       });
@@ -212,49 +326,59 @@ const RegistrationP = ({navigation, route}) => {
       };
     }
   }, []);
-
+  console.log('fromOtpParam', fromOtpParam);
   const handleSubmit = async () => {
     // Validate required fields
-
-    if (!formData.current_location) {
-      showToastMessage('Please select a valid location.', 'danger');
-      return;
-    } else if (!formData?.gender) {
-      showToastMessage('Please select your gender.', 'danger');
-      return;
-    } else if (!formData?.dob) {
-      showToastMessage('Please select a valid date of birth.', 'danger');
-      return;
-    } else if (!formData?.education_level) {
+    console.log('formDataformData', formData);
+    console.log('educationData', educationData);
+    if (!educationData?.educationLevel) {
       showToastMessage('Please select education level.', 'danger');
       return;
-    } else if (!formData?.jobTitle) {
-      showToastMessage('Please select job title.', 'danger');
+    } else if (!selectedSkills || selectedSkills.length === 0) {
+      showToastMessage('Please select skills.', 'danger');
       return;
-    } else if (!formData?.preferred_job_industry) {
-      showToastMessage('Please select preferred job industry.', 'danger');
+    } else if (!englishSpeaking) {
+      showToastMessage('Please select english speaking.', 'danger');
       return;
     }
+    //  else if (!formData?.preferred_job_industry) {
+    //   showToastMessage('Please select preferred job industry.', 'danger');
+    //   return;
+    // }
     try {
       const storedUserId = await AsyncStorage.getItem('UserID');
-      const form = new FormData();
-      form.append('userId', formData.userId || storedUserId);
-      form.append('current_location', formData.current_location);
-      form.append('lat', formData.cllat);
-      form.append('lng', formData.cllng);
-      form.append('city', formData.city);
-      form.append('state', formData.state);
-      form.append('pincode', formData.pincode);
-      form.append('dob', formData.dob);
-      form.append('gender', formData.gender);
-      form.append('education_level', formData.education_level);
-      form.append('jobTitle', formData.jobTitle);
-      form.append('preferred_job_industry', formData.preferred_job_industry);
 
-      // // console.log('FormData payload:', form);
+      // Convert "Post Graduate" to "Postgraduate" for API
+      let educationLevel = educationData.educationLevel;
+      if (educationLevel === 'Post Graduate') {
+        educationLevel = 'Postgraduate';
+      } else if (educationLevel === 'Graduate') {
+        educationLevel = 'Graduate';
+      }
+
+      // Prepare the data object matching API format
+      const requestData = {
+        userId: parseInt(formData.userId || storedUserId),
+        educationLevel: educationLevel,
+        collegeName: educationData.collegeName || '',
+        degree: educationData.degree || '',
+        specialization: educationData.specialization || '',
+        educationType: educationData.educationType || '',
+        startDate: educationData.startDate || '',
+        endDate: educationData.endDate || '',
+        skills: selectedSkills || [],
+        englishSpeaking: englishSpeaking || '',
+        jobseekerId: fromOtpParam?.jobseekerId ? fromOtpParam?.jobseekerId : '',
+      };
+
+      console.log('API Request Data:', JSON.stringify(requestData, null, 2));
+
+      // Send as FormData with 'raw' field containing JSON string
+      const form = new FormData();
+      form.append('raw', JSON.stringify(requestData));
 
       const response = await fetch(
-        'https://jobipo.com/api/v2/update-step-two',
+        'https://jobipo.com/api/v3/candidate-update-step-two',
         {
           method: 'POST',
           body: form,
@@ -286,7 +410,7 @@ const RegistrationP = ({navigation, route}) => {
 
       if (res && res.type === 'success') {
         // Alert.alert('Success', 'Details saved successfully');
-        navigation.navigate('RegistrationS');
+        navigation.navigate('RegistrationS', {fromOtpParam: fromOtpParam});
       } else {
         const message =
           typeof res.message === 'string'
@@ -301,9 +425,73 @@ const RegistrationP = ({navigation, route}) => {
       );
     }
   };
+  const fetchedData = {
+    educationLevel: '',
+    collegeName: '',
+    degree: '',
+    specialization: '',
+    educationType: '',
+    startDate: '',
+    endDate: '',
 
+    // new
+    yearOfCompletion: '',
+  };
+
+  const colorScheme = useColorScheme();
+  const textColor = colorScheme === 'dark' ? '#000' : '#000';
+  // const [educationData, setEducationData] = useState(data | fetchedData);
+  const [educationData, setEducationData] = useState(
+    fetchedData || {
+      educationLevel: '',
+      collegeName: '',
+      degree: '',
+      yearOfCompletion: '',
+    },
+  );
   // // console.log('formData:', formData);
+  const graduationDegrees = [
+    {label: 'B.A.', value: 'B.A.'},
+    {label: 'B.Sc.', value: 'B.Sc.'},
+    {label: 'B.Com.', value: 'B.Com.'},
+    {label: 'BBA', value: 'BBA'},
+    {label: 'BCA', value: 'BCA'},
+    {label: 'B.Tech', value: 'B.Tech'},
+    {label: 'B.E.', value: 'B.E.'},
+    {label: 'LLB', value: 'LLB'},
+    {label: 'B.Ed.', value: 'B.Ed.'},
+    {label: 'BFA', value: 'BFA'},
+    {label: 'BPT', value: 'BPT'},
+    {label: 'BHM', value: 'BHM'},
+    {label: 'Other', value: 'Other'},
+  ];
 
+  const postGraduationDegrees = [
+    {label: 'M.A.', value: 'M.A.'},
+    {label: 'M.Sc.', value: 'M.Sc.'},
+    {label: 'M.Com.', value: 'M.Com.'},
+    {label: 'MBA', value: 'MBA'},
+    {label: 'MCA', value: 'MCA'},
+    {label: 'M.Tech', value: 'M.Tech'},
+    {label: 'M.E.', value: 'M.E.'},
+    {label: 'LLM', value: 'LLM'},
+    {label: 'M.Ed.', value: 'M.Ed.'},
+    {label: 'MPA', value: 'MPA'},
+    {label: 'MFA', value: 'MFA'},
+    {label: 'Other', value: 'Other'},
+  ];
+
+  const showDegreePicker = ['Graduate', 'Post Graduate'].includes(
+    educationData.educationLevel,
+  );
+
+  const degreeOptions =
+    educationData.educationLevel === 'Graduate'
+      ? graduationDegrees
+      : educationData.educationLevel === 'Post Graduate'
+        ? postGraduationDegrees
+        : [];
+  console.log('educationData.educationLevel', educationData.educationLevel);
   return (
     <KeyboardScroll
       contentContainerStyle={{flexGrow: 1}}
@@ -314,14 +502,14 @@ const RegistrationP = ({navigation, route}) => {
         <StepIndicator2 />
         <View style={styles.card}>
           <View style={styles.ContainerDetails}>
-            <View
+            {/* <View
               style={{
                 flexDirection: 'row',
                 justifyContent: 'space-between',
                 alignItems: 'center',
               }}>
               <Text style={styles.label}>Current Location</Text>
-            </View>
+            </View> */}
             {/* <GooglePlacesInput
               value={formData.current_location}
               setValue={val => {
@@ -336,7 +524,7 @@ const RegistrationP = ({navigation, route}) => {
                 });
               }}
             /> */}
-            <PlacesAutocomplete
+            {/* <PlacesAutocomplete
               apiKey={'AIzaSyDqBEtr9Djdq0b9NTCMmquSrKiPCCv384o'}
               onPlaceSelected={(address, placeId, val) => {
                 // Extract state and pincode with fallbacks
@@ -367,343 +555,256 @@ const RegistrationP = ({navigation, route}) => {
                 }
               }}
               onBlur={() => setFocusedInput(null)}
-            />
+            /> */}
 
-            {/* State Field */}
-            {/* {selectedState ? (
-              <View>
-                <Text style={styles.label}>State</Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {backgroundColor: '#ffffff', color: '#333'},
-                  ]}
-                  placeholder="State"
-                  value={selectedState}
-                  editable={false}
-                />
-              </View>
-            ) : null} */}
+            {/* Education Level Field */}
+            <Text style={styles.label}>Education Level</Text>
 
-            {/* {selectedPincode ? (
-              <View>
-                <Text style={styles.label}>Pincode</Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {backgroundColor: '#ffffff', color: '#333'},
-                  ]}
-                  placeholder="Pincode"
-                  value={selectedPincode}
-                  editable={false}
-                />
-              </View>
-            ) : null} */}
-
-            <Text style={styles.label}>Gender</Text>
-
-            <View style={styles.genderGroup}>
+            <View style={styles.buttonGroup}>
               {[
-                {label: 'Male', value: '1'},
-                {label: 'Female', value: '2'},
-                {label: 'Other', value: '3'},
-              ].map(option => {
-                const isActive = formData.gender === option.value;
+                ' 10th Below',
+                '10th',
+                '12th',
+                'Graduate',
+                'Post Graduate',
+                'ITI',
+                'DIPLOMA',
+              ].map(level => (
+                <TouchableOpacity
+                  key={level}
+                  style={[
+                    styles.button,
+                    educationData.educationLevel === level &&
+                      styles.buttonSelected,
+                  ]}
+                  onPress={() => {
+                    setEducationData({...educationData, educationLevel: level});
+                  }}>
+                  <Text
+                    style={[
+                      styles.buttonText,
+                      educationData.educationLevel === level &&
+                        styles.buttonTextSelected,
+                    ]}>
+                    {level}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {showDegreePicker ? (
+              <View>
+                <Text style={styles.labelPicker}>Course Name</Text>
+                <View style={styles.pickerWrapper}>
+                  <Picker
+                    enabled={showDegreePicker}
+                    selectedValue={showDegreePicker ? educationData.degree : ''}
+                    onValueChange={itemValue => {
+                      if (showDegreePicker) {
+                        setEducationData({...educationData, degree: itemValue});
+                      }
+                    }}
+                    style={[
+                      // styles.picker,
+                      {
+                        color: educationData.degree ? 'black' : '#BABFC7',
+                        fontSize: 10,
+                      },
+                    ]}>
+                    <Picker.Item
+                      style={[styles.picker, {color: textColor, fontSize: 12}]}
+                      label="Select Degree"
+                      value=""
+                    />
+                    {degreeOptions.map(deg => (
+                      <Picker.Item
+                        style={[
+                          styles.picker,
+                          {color: textColor, fontSize: 12},
+                        ]}
+                        key={deg.value}
+                        label={deg.label}
+                        value={deg.value}
+                      />
+                    ))}
+                  </Picker>
+                </View>
+              </View>
+            ) : (
+              <View style={{height: 20}} />
+            )}
+            <Text style={styles.label}>Skills (up to 10)</Text>
+
+            <View style={styles.jobDetails}>
+              <View style={styles.skillInputContainer}>
+                <TextInput
+                  style={styles.inputFlex}
+                  placeholder="Add only 1 skill at a time"
+                  placeholderTextColor="#BABFC7"
+                  value={skill}
+                  onChangeText={text => {
+                    setSkill(text);
+                    setOpen(true);
+                  }}
+                  onFocus={() => setOpen(true)}
+                  onBlur={() => {
+                    // Delay closing to allow item selection
+                    setTimeout(() => setOpen(false), 200);
+                  }}
+                  onSubmitEditing={() => {
+                    if (skill.trim()) {
+                      addSkill(skill);
+                    } else {
+                      setOpen(false);
+                    }
+                  }}
+                />
+
+                {open &&
+                  skill.trim().length > 0 &&
+                  formData?.skills?.length > 0 &&
+                  getAvailableSkills(skill, formData?.skills, selectedSkills)
+                    .length > 0 && (
+                    <FlatList
+                      nestedScrollEnabled={true}
+                      style={{
+                        position: 'absolute',
+                        height: Math.min(
+                          getAvailableSkills(
+                            skill,
+                            formData?.skills,
+                            selectedSkills,
+                          ).length *
+                            50 +
+                            10,
+                          300,
+                        ),
+                        top: 50,
+                        left: 0,
+                        right: 0,
+                        backgroundColor: '#fff',
+                        zIndex: 1000,
+                        borderRadius: 8,
+                        elevation: 10,
+                        shadowColor: '#000',
+                        shadowOffset: {width: 0, height: 2},
+                        shadowOpacity: 0.25,
+                        shadowRadius: 3.84,
+                      }}
+                      contentContainerStyle={{
+                        flexGrow: 1,
+                        paddingVertical: 5,
+                      }}
+                      ItemSeparatorComponent={() => (
+                        <View style={{height: 1, backgroundColor: '#eee'}} />
+                      )}
+                      keyboardShouldPersistTaps="handled"
+                      data={getAvailableSkills(
+                        skill,
+                        formData?.skills,
+                        selectedSkills,
+                      )}
+                      keyExtractor={item => item}
+                      renderItem={({item}) => {
+                        return (
+                          <TouchableOpacity
+                            onPress={() => {
+                              addSkill(item);
+                            }}
+                            style={{
+                              paddingHorizontal: 15,
+                              paddingVertical: 12,
+                            }}>
+                            <Text style={{color: '#333', fontSize: 14}}>
+                              {item}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      }}
+                    />
+                  )}
+              </View>
+
+              {/* Selected Skills - Orange chips with X icon */}
+              {selectedSkills?.length > 0 && (
+                <View style={styles.skillsContainer}>
+                  {selectedSkills.map((item, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      activeOpacity={0.7}
+                      onPress={() => removeSkill(item)}
+                      style={styles.skillChipSelected}>
+                      <Text style={styles.skillTextSelected}>{item}</Text>
+                      <Icon
+                        name="close"
+                        size={16}
+                        color="#fff"
+                        style={{marginLeft: 6}}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Available Skills - Light chips with + icon */}
+              {formData?.skills?.length > 0 && (
+                <View style={styles.availableSkillsContainer}>
+                  {getAvailableSkills('', formData?.skills, selectedSkills)
+                    .slice(0, 6)
+                    .map((item, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        activeOpacity={0.7}
+                        onPress={() => addSkill(item)}
+                        style={styles.skillChipAvailable}>
+                        <Text style={styles.skillTextAvailable}>{item}</Text>
+                        <Icon
+                          name="add"
+                          size={16}
+                          color="#FF8D53"
+                          style={{marginLeft: 6}}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                </View>
+              )}
+            </View>
+
+            <Text style={styles.label}>English Speaking</Text>
+
+            <View style={styles.englishSpeakingGroup}>
+              {['Basic', 'Medium', 'Fluent', 'No English'].map(level => {
+                const isSelected = englishSpeaking === level;
                 return (
                   <Pressable
-                    key={option.value}
-                    style={styles.genderOption}
-                    onPress={() => {
-                      setFormData({...formData, gender: option.value});
-                      setFocusedInput('gender');
-                      setLocationSelected(true); // Prevent location suggestions
-                    }}>
+                    key={level}
+                    style={styles.englishSpeakingOption}
+                    onPress={() => setEnglishSpeaking(level)}>
                     <View
                       style={[
-                        styles.outerCircle,
-                        isActive && styles.outerCircleActive,
+                        styles.englishRadioCircle,
+                        isSelected && styles.englishRadioCircleActive,
                       ]}>
-                      {isActive && <View style={styles.innerDot} />}
+                      {isSelected && <View style={styles.englishRadioInner} />}
                     </View>
                     <Text
                       style={[
-                        styles.genderLabel,
-                        isActive && styles.genderLabelActive,
+                        styles.englishSpeakingLabel,
+                        isSelected && styles.englishSpeakingLabelActive,
                       ]}>
-                      {option.label}
+                      {level}
                     </Text>
                   </Pressable>
                 );
               })}
             </View>
-
-            {/* Gender Field */}
-            {/* <Text style={styles.label}>Gender</Text>
-            <View style={styles.radioGroup}>
-              {[
-                { label: 'Male', value: '1' },
-                { label: 'Female', value: '2' },
-                { label: 'Other', value: '3' },
-              ].map((option) => (
-                <Pressable
-                  key={option.value}
-                  style={[styles.radioBtn, formData.gender === option.value && styles.radioBtnActive]}
-                  onPress={() => setFormData({ ...formData, gender: option.value })}
-                >
-                  <Text
-                    style={[styles.radioBtnText, formData.gender === option.value && styles.radioBtnTextActive]}
-                  >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View> */}
-
-            {/* Date of Birth Field */}
-            <View style={styles.fieldContainer}>
-              <Text style={styles.label}>Date Of Birth</Text>
-              <TextInput
-                placeholder="dd/mm/yyyy"
-                value={formData.dob}
-                onChangeText={text => {
-                  const cleaned = text.replace(/[^\d]/g, '');
-                  let formatted = '';
-                  if (cleaned.length <= 2) {
-                    formatted = cleaned;
-                  } else if (cleaned.length <= 4) {
-                    formatted = `${cleaned.slice(0, 2)}/${cleaned.slice(2)}`;
-                  } else {
-                    formatted = `${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}/${cleaned.slice(4, 8)}`;
-                  }
-                  setFormData({...formData, dob: formatted});
-                }}
-                placeholderTextColor="#BABFC7"
-                keyboardType="number-pad"
-                maxLength={10}
-                style={styles.input}
-                onFocus={() => {
-                  setFocusedInput('dateOfBirth');
-                  setLocationSelected(true); // Prevent location suggestions
-                }}
-                onBlur={() => setFocusedInput(null)}
-              />
-            </View>
-
-            {/* Education Level Field */}
-            <Text style={styles.label}>Education Level</Text>
-            <View style={styles.radioGroup}>
-              {[
-                '10th_below',
-                '10th',
-                '12th',
-                'graduate',
-                'postgraduate',
-                'iti',
-                'diploma',
-              ].map(option => (
-                <Pressable
-                  key={option}
-                  style={[
-                    styles.radioBtn,
-                    formData.education_level === option &&
-                      styles.radioBtnActive,
-                  ]}
-                  onPress={() => {
-                    setFormData({...formData, education_level: option});
-                    setFocusedInput('education');
-                    setLocationSelected(true); // Prevent location suggestions
-                  }}>
-                  <Text
-                    style={[
-                      styles.radioBtnText,
-                      formData.education_level === option &&
-                        styles.radioBtnTextActive,
-                    ]}>
-                    {option === '10th_below'
-                      ? '10th Below'
-                      : option === '10th'
-                        ? '10th'
-                        : option === '12th'
-                          ? '12th'
-                          : option === 'graduate'
-                            ? 'Graduate'
-                            : option === 'postgraduate'
-                              ? 'Post Graduate'
-                              : option === 'iti'
-                                ? 'ITI'
-                                : 'Diploma'}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Text style={styles.label}>Job Title</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter Job Title"
-              value={formData.jobTitle}
-              onChangeText={handleJobTitleChange}
-              placeholderTextColor="#BABFC7"
-              keyboardType="default"
-              returnKeyType="next"
-              maxLength={100}
-              onFocus={() => {
-                setFocusedInput('jobTitle');
-                setLocationSelected(true); // Prevent location suggestions
-              }}
-              onBlur={() => setFocusedInput(null)}
-            />
-
-            {filteredJobTitles.length > 0 && (
-              <View style={styles.suggestionBox}>
-                <FlatList
-                  data={filteredJobTitles}
-                  keyboardShouldPersistTaps="handled"
-                  keyExtractor={item => item.jobTitleId}
-                  renderItem={({item}) => (
-                    <TouchableOpacity
-                      style={styles.suggestionItem}
-                      onPress={() => handleSuggestionPress(item.jobTitle)}>
-                      <Text>{item.jobTitle}</Text>
-                    </TouchableOpacity>
-                  )}
-                />
-              </View>
-            )}
-            {/* 
-  <Text style={styles.label}> Job Title</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter Job Title"
-              placeholderTextColor={isDarkMode ? '#555' : '#555'}
-              value={formData.jobTitle}
-            onChangeText={(text) => setFormData({ ...formData, jobTitle: text })}
-            /> */}
-            {/* Preferred Job Industry */}
-            <View style={styles.fieldContainer}>
-              <Text style={styles.label}>Preferred Job Industry</Text>
-              <View style={styles.dropdownBox}>
-                <Picker
-                  style={{
-                    color: formData?.preferred_job_industry
-                      ? '#000'
-                      : '#D0D0D0',
-                  }}
-                  dropdownIconColor="#000"
-                  selectedValue={formData.preferred_job_industry}
-                  onValueChange={itemValue =>
-                    setFormData({
-                      ...formData,
-                      preferred_job_industry: itemValue,
-                    })
-                  }
-                  onFocus={() => {
-                    setFocusedInput('jobIndustry');
-                    setLocationSelected(true); // Prevent location suggestions
-                  }}
-                  onBlur={() => setFocusedInput(null)}>
-                  <Picker.Item
-                    label="--Select Preferred Job Industry--"
-                    value=""
-                  />
-                  <Picker.Item label="IT & Software" value="IT & Software" />
-                  <Picker.Item
-                    label="Education & Training"
-                    value="Education & Training"
-                  />
-                  <Picker.Item label="Transportation" value="Transportation" />
-                  <Picker.Item
-                    label="Facility Management"
-                    value="Facility Management"
-                  />
-                  <Picker.Item
-                    label="Real Estate & Property"
-                    value="Real Estate & Property"
-                  />
-                  <Picker.Item
-                    label="Insurance & Stock Market"
-                    value="Insurance & Stock Market"
-                  />
-                  <Picker.Item
-                    label="E-Commerce Management"
-                    value="E-Commerce Management"
-                  />
-                  <Picker.Item
-                    label="Hospitality & Tourism"
-                    value="Hospitality & Tourism"
-                  />
-                  <Picker.Item
-                    label="Healthcare & Support"
-                    value="Healthcare & Support"
-                  />
-                  <Picker.Item label="BPO & KPO" value="BPO & KPO" />
-                  <Picker.Item
-                    label="Banking, Financial Services & Insurance"
-                    value="Banking, Financial Services & Insurance"
-                  />
-                  <Picker.Item
-                    label="E-commerce & Retail"
-                    value="E-commerce & Retail"
-                  />
-                  <Picker.Item
-                    label="Healthcare & Pharmaceuticals"
-                    value="Healthcare & Pharmaceuticals"
-                  />
-                  <Picker.Item
-                    label="Engineering & Manufacturing"
-                    value="Engineering & Manufacturing"
-                  />
-                  <Picker.Item
-                    label="Sales & Marketing"
-                    value="Sales & Marketing"
-                  />
-                  <Picker.Item label="Telecom" value="Telecom" />
-                  <Picker.Item label="Automobile" value="Automobile" />
-                  <Picker.Item
-                    label="Hospitality & Travel"
-                    value="Hospitality & Travel"
-                  />
-                  <Picker.Item
-                    label="Logistics & Supply Chain"
-                    value="Logistics & Supply Chain"
-                  />
-                  <Picker.Item
-                    label="Construction & Real Estate"
-                    value="Construction & Real Estate"
-                  />
-                  <Picker.Item
-                    label="Legal & Compliance"
-                    value="Legal & Compliance"
-                  />
-                  <Picker.Item
-                    label="Media, Advertising & Entertainment"
-                    value="Media, Advertising & Entertainment"
-                  />
-                  <Picker.Item
-                    label="Agriculture & Rural Development"
-                    value="Agriculture & Rural Development"
-                  />
-                  <Picker.Item
-                    label="Human Resources & Recruitment"
-                    value="Human Resources & Recruitment"
-                  />
-                  <Picker.Item
-                    label="Design & Creative"
-                    value="Design & Creative"
-                  />
-                  <Picker.Item label="Others" value="Others" />
-                </Picker>
-              </View>
-            </View>
           </View>
-          {/* 
-          <TouchableOpacity style={styles.continueBtn} onPress={handleSubmit}>
-            <Text style={styles.continueText}>Next </Text>
-          </TouchableOpacity> */}
-          <TouchableOpacity style={styles.continueBtn} onPress={handleSubmit}>
+
+          <TouchableOpacity
+            style={styles.continueBtn}
+            // onPress={() => navigation.navigate('RegistrationS')}
+            onPress={handleSubmit}>
             <View style={styles.continueContent}>
               <Text style={styles.continueText}>Next</Text>
-              {/* <Ionicons name="arrow-forward" size={20} color="#fff" style={styles.iconStyle} /> */}
             </View>
           </TouchableOpacity>
           <View style={styles.lastInfo}>
@@ -1067,6 +1168,299 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderBottomColor: '#eee',
     borderBottomWidth: 1,
+  },
+  buttonGroup: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    // justifyContent: "start",
+  },
+  button: {
+    paddingVertical: 10,
+    paddingHorizontal: 17,
+    borderRadius: 19,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    margin: 4,
+  },
+  buttonSelected: {backgroundColor: '#FF8D53'},
+  buttonText: {color: '#535353', fontWeight: '400'},
+  buttonTextSelected: {color: '#fff'},
+  radioGroup: {flexDirection: 'row', justifyContent: 'space-around'},
+  radioOption: {flexDirection: 'row', alignItems: 'center'},
+  saveContainer: {justifyContent: 'center', alignItems: 'center'},
+  loadingContainer: {flex: 1, justifyContent: 'center', alignItems: 'center'},
+  labelPicker: {
+    fontSize: 15,
+    color: '#535353',
+    fontWeight: '500',
+    marginTop: 15,
+    marginBottom: 1,
+  },
+  label: {
+    fontSize: 14,
+    color: '#535353',
+    fontWeight: '500',
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  input: {backgroundColor: '#ffffff', borderRadius: 8, padding: 10},
+  pickerWrapper: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    height: 43,
+    width: '100%',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  picker: {height: 50, backgroundColor: '#fff'},
+  buttonGroup: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    // justifyContent: "start",
+  },
+  skillInputContainer: {
+    position: 'relative',
+    width: '100%',
+    // marginBottom: 16,
+  },
+  inputFlex: {
+    width: '100%',
+    height: 45,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#fff',
+    color: '#333',
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  addButton: {
+    marginLeft: 10,
+    height: 40,
+    backgroundColor: '#2d8659',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 5,
+    paddingHorizontal: 10,
+  },
+  jobDetails: {
+    marginTop: 8,
+  },
+  skillsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 16,
+  },
+  availableSkillsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 12,
+  },
+  skillChipSelected: {
+    backgroundColor: '#FF8D53',
+    marginRight: 10,
+    marginBottom: 10,
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  skillChipAvailable: {
+    backgroundColor: '#ffffff',
+    marginRight: 10,
+    marginBottom: 10,
+    borderRadius: 20,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    // borderWidth: 1,
+    // borderColor: '#E0E0E0',
+    // elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
+  skillTextSelected: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  skillTextAvailable: {
+    color: '#535353',
+    fontSize: 14,
+    fontWeight: '400',
+  },
+  removeButton: {
+    marginLeft: 5,
+    backgroundColor: '#e74c3c',
+    padding: 5,
+    borderRadius: 5,
+  },
+  saveButton: {
+    backgroundColor: '#2d8659',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderRadius: 5,
+  },
+  pickerContainer: {
+    marginTop: 8,
+    backgroundColor: '#ffffff',
+    marginBottom: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    paddingHorizontal: 15,
+    height: 45,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+
+  // picker: {
+  //   height: 50,
+  // },
+  pickerText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  placeholderText: {
+    color: '#D0D0D0',
+  },
+
+  selectedText: {
+    color: '#000',
+    fontFamily: '600',
+  },
+  pickerContainer: {
+    marginTop: 8,
+    backgroundColor: '#ffffff',
+    marginBottom: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    paddingHorizontal: 15,
+    height: 45,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+
+  // picker: {
+  //   height: 50,
+  // },
+  pickerText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    maxHeight: '70%',
+    width: '100%',
+    maxWidth: 400,
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  modalOptions: {
+    maxHeight: 300,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalOptionSelected: {
+    backgroundColor: '#f8f8f8',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  modalOptionTextSelected: {
+    color: '#FF8D53',
+    fontWeight: '600',
+  },
+  englishSpeakingGroup: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  englishSpeakingOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 20,
+    marginBottom: 8,
+  },
+  englishRadioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#535353',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+    backgroundColor: 'transparent',
+  },
+  englishRadioCircleActive: {
+    borderColor: '#FF8D53',
+    backgroundColor: '#FF8D53',
+  },
+  englishRadioInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+  },
+  englishSpeakingLabel: {
+    fontSize: 14,
+    color: '#535353',
+    fontWeight: '400',
+  },
+  englishSpeakingLabelActive: {
+    color: '#535353',
+    fontWeight: '500',
   },
 });
 
