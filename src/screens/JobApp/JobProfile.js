@@ -1733,7 +1733,7 @@ const JobProfile = () => {
                   ) : (
                     <View style={styles.pdfErrorContainer}>
                       <Icon name="picture-as-pdf" size={48} color="#FF8D53" />
-                      <Text style={styles.pdfErrorText}>Resume Uploaded</Text>
+                      {/* <Text style={styles.pdfErrorText}>Resume Uploaded</Text> */}
                       <Text style={styles.pdfErrorSubText}>Tap to update</Text>
                     </View>
                   )}

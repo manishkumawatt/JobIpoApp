@@ -112,7 +112,7 @@ const Myteam = ({navigation}) => {
         <View style={styles.MainContainer}>
           <View style={[styles.product, styles.BackgroundBlue]}>
             <View style={[styles.bigWith]}>
-              <Text style={styles.title}>Your Friends</Text>
+              <Text style={styles.title}>Your Friends bbbbb</Text>
             </View>
             <View style={styles.productDescBox}>
               <Text style={styles.title}>Friends Earning</Text>

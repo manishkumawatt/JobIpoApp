@@ -55,7 +55,7 @@ const Myearning = ({navigation}) => {
     )
       .then(res => res.json())
       .catch(err => console.log(err));
-
+    console.log('sliderDataApi========>', sliderDataApi);
     setisLoading(false);
     if (sliderDataApi && sliderDataApi.logout != 1) {
       setEarning(

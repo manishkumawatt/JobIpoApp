@@ -136,7 +136,7 @@ const Leads = ({navigation}) => {
         LeadStatus: LeadStatus,
         page: pageNumber, // make sure API accepts this
       };
-
+      console.log('formdata-==-==-', formdata);
       const response = await fetch('https://jobipo.com/api/v2/my-leads', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
