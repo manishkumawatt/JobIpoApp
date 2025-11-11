@@ -33,6 +33,8 @@ const LocationPicker = ({navigation, route}) => {
   const [showCityModal, setShowCityModal] = useState(false);
   const [citySearchQuery, setCitySearchQuery] = useState('');
   const [filteredCities, setFilteredCities] = useState([]);
+  const [selectedLat, setSelectedLat] = useState('');
+  const [selectedLng, setSelectedLng] = useState('');
   const [selectedState, setSelectedState] = useState('');
   const [selectedPincode, setSelectedPincode] = useState('');
   const [locationSelected, setLocationSelected] = useState(false);
@@ -41,7 +43,7 @@ const LocationPicker = ({navigation, route}) => {
   const [cities, setCities] = useState([]);
   const [states, setStates] = useState([]);
   const [loadingCities, setLoadingCities] = useState(false);
-
+  let fromEdit = route?.params?.fromEdit || false;
   // Fetch states
   const fetchStates = useCallback(async () => {
     try {
@@ -126,10 +128,22 @@ const LocationPicker = ({navigation, route}) => {
       const locationParts = route.params.current_location.split(',');
       if (locationParts.length >= 2) {
         setCity(locationParts[0]?.trim() || '');
-        setArea(locationParts.slice(1).join(',').trim() || '');
+        const areaPart = locationParts.slice(1).join(',').trim() || '';
+        setArea(areaPart);
+        // If coming from JobProfile (fromEdit), set location as selected
+        if (fromEdit && areaPart) {
+          setLocationSelected(true);
+        }
+      } else if (locationParts.length === 1) {
+        // If only one part, treat it as area (for backward compatibility)
+        const areaPart = locationParts[0]?.trim() || '';
+        setArea(areaPart);
+        if (fromEdit && areaPart) {
+          setLocationSelected(true);
+        }
       }
     }
-  }, [route?.params]);
+  }, [route?.params, fromEdit]);
 
   const handleUseCurrentLocation = async () => {
     setIsGettingLocation(true);
@@ -343,16 +357,6 @@ const LocationPicker = ({navigation, route}) => {
   };
 
   const handleSubmit = () => {
-    if (!city || !city.trim()) {
-      showToastMessage('Please select your city', 'danger');
-      return;
-    }
-
-    if (!area || !area.trim()) {
-      showToastMessage('Please enter your area', 'danger');
-      return;
-    }
-
     Keyboard.dismiss();
 
     // Find selected city data from API
@@ -367,15 +371,14 @@ const LocationPicker = ({navigation, route}) => {
     // Combine city and area into full location string
     const fullLocation = `${city}, ${area}`;
 
-    // Return to Register screen with selected location data
     if (route?.params?.onLocationSelect) {
       route.params.onLocationSelect(
         fullLocation, // current_location
-        '', // lat - empty for manual selection
-        '', // lng - empty for manual selection
+        selectedLat, // lat - empty for manual selection
+        selectedLng, // lng - empty for manual selection
         city, // city
         stateName, // state
-        '', // pincode - not available from manual selection
+        selectedPincode, // pincode - not available from manual selection
         area, // area
         selectedState, // state
         selectedPincode, // pincode
@@ -384,30 +387,6 @@ const LocationPicker = ({navigation, route}) => {
     navigation.goBack();
   };
 
-  // Helper function to extract pincode from address string
-  const extractPincodeFromAddress = address => {
-    if (!address) return '';
-
-    const patterns = [
-      /\b\d{6}\b/g, // 6 digits
-      /\b\d{5,6}\b/g, // 5-6 digits
-      /pincode[:\s]*(\d{6})/i, // "pincode: 123456"
-      /pin[:\s]*(\d{6})/i, // "pin: 123456"
-      /(\d{6})/g, // any 6 digits
-    ];
-
-    for (const pattern of patterns) {
-      const matches = address.match(pattern);
-      if (matches && matches.length > 0) {
-        const sixDigitMatch = matches.find(match => match.length === 6);
-        if (sixDigitMatch) {
-          return sixDigitMatch;
-        }
-      }
-    }
-
-    return '';
-  };
   return (
     <>
       {/* Custom Overlay Modal - Using absolute positioning instead of Modal */}
@@ -583,25 +562,16 @@ const LocationPicker = ({navigation, route}) => {
               <Text style={styles.label}>Enter Your Area</Text>
               <PlacesAutocomplete
                 apiKey={'AIzaSyDqBEtr9Djdq0b9NTCMmquSrKiPCCv384o'}
+                value={area}
                 onPlaceSelected={(address, placeId, val) => {
-                  // Extract state and pincode with fallbacks
-                  const extractedState = val.state || '';
-                  const extractedPincode =
-                    val.pincode || extractPincodeFromAddress(address);
+                  console.log('address=-=-=-=-', val);
 
-                  setSelectedState(extractedState);
-                  setSelectedPincode(extractedPincode);
+                  setSelectedLat(val.lat);
+                  setSelectedLng(val.lng);
+                  setSelectedState(val.state);
+                  setSelectedPincode(val.pincode);
                   setLocationSelected(true);
                   setArea(val.Locality);
-                  setFormData({
-                    ...formData,
-                    current_location: val.Locality,
-                    cllat: val.lat,
-                    cllng: val.lng,
-                    city: val?.city,
-                    state: extractedState,
-                    pincode: extractedPincode,
-                  });
                 }}
                 showSuggestions={
                   focusedInput === 'location' && !locationSelected

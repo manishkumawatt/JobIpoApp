@@ -700,6 +700,15 @@ export default function App() {
           animation: 'none',
         }),
       },
+      {
+        id: 63,
+        name: 'LocationPicker',
+        component: LocationPicker,
+        option: ({route}) => ({
+          headerShown: false,
+          animation: 'none',
+        }),
+      },
     ];
 
     return (

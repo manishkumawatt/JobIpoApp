@@ -34,6 +34,7 @@ import {
 import {permissionConfirm} from '../../utils/alertController';
 import {AUTH_TOKEN} from '../../appRedux/apis/commonValue';
 import PlacesAutocomplete from '../../components/PlacesAutocomplete';
+import {handleSetRoot} from '../../navigation/navigationService';
 
 const RegistrationS = ({navigation, route}) => {
   const {signIn} = useContext(AuthContext);
@@ -289,12 +290,7 @@ const RegistrationS = ({navigation, route}) => {
     setResumeFile(null);
     setResumeFileName('');
   };
-
   const handleSubmit = async () => {
-    if (resumeFile) {
-      setShowWorkExperienceForm(true);
-      return;
-    }
     if (!experience) {
       showToastMessage('Please select experience', 'danger');
       return;
@@ -306,16 +302,13 @@ const RegistrationS = ({navigation, route}) => {
       return;
     }
 
-    // If resume file exists, show work experience form instead of submitting
-    if (resumeFile) {
-      setShowWorkExperienceForm(true);
-      return;
-    }
-
     try {
       const storedUserId = await AsyncStorage.getItem('UserID');
+      const jobseekerIdP = await AsyncStorage.getItem('jobseekerId');
+      console.log('jobseekerIdP-=-=-=-=-', jobseekerIdP);
       const {fromOtpParam} = route?.params || {};
-      const jobseekerId = fromOtpParam?.jobseekerId || data?.jobseekerId || '';
+      const jobseekerId = fromOtpParam?.jobseekerId || jobseekerIdP;
+      console.log('fromOtpParam', fromOtpParam);
 
       const form = new FormData();
 
@@ -344,81 +337,89 @@ const RegistrationS = ({navigation, route}) => {
         form.append('cv', '');
       }
       console.log('form---1--1---', form);
-      console.log('FormData being sent:', {
-        userId: userId || storedUserId,
-        jobseekerId,
-        totalExperience: experience,
-        preferredJobIndustry: formData.preferred_job_industry,
-        jobTitle: data?.jobTitle || formData?.jobTitle,
-        current_salary: currentSalary,
-        hasResume: !!resumeFile,
-      });
-
+      // console.log('FormData being sent:', {
+      //   userId: userId || storedUserId,
+      //   jobseekerId,
+      //   totalExperience: experience,
+      //   preferredJobIndustry: formData.preferred_job_industry,
+      //   jobTitle: data?.jobTitle || formData?.jobTitle,
+      //   current_salary: currentSalary,
+      //   hasResume: !!resumeFile,
+      // });
       const response = await fetch(
         'https://jobipo.com/api/v3/candidate-update-step-three',
         {
           headers: {
-            Authorization: `Bearer ${AUTH_TOKEN}`,
+            'Content-Type': 'multipart/form-data',
+            Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
           },
           method: 'POST',
           body: form,
         },
       );
-
+      // headers: {
+      //   'Content-Type': 'application/json',
+      //   Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+      // },
       const rawText = await response.text();
       const jsonStart = rawText.indexOf('{');
       const jsonEnd = rawText.lastIndexOf('}');
       const jsonString = rawText.substring(jsonStart, jsonEnd + 1);
       const res = JSON.parse(jsonString);
 
-      // // console.log('res submit', res);
-
-      if (res && res.type === 'success') {
-        if (userId !== '') {
-          const formdata = {user_id: userId};
-
-          try {
-            const response = await fetch(
-              'https://jobipo.com/api/v2/auto-login',
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formdata),
-              },
-            );
-
-            const ResData = await response.json();
-
-            await AsyncStorage.setItem('UserID', String(ResData.user_id));
-            const storedUserId = await AsyncStorage.getItem('UserID');
-            // // console.log('Saved userId in AsyncStorage:', storedUserId);
-
-            if (ResData.status == 1) {
-              // Alert.alert(ResData.message);
-              let userToken = String(ResData.token);
-              let userfullName = String(ResData.name);
-              let userreferCode = String(ResData.referCode);
-              let usercontactNumber1 = String(ResData.contact_number);
-              showToastMessage(ResData?.message, 'success');
-              await signIn(userToken, usercontactNumber1);
-              await AsyncStorage.setItem('contactNumber1', usercontactNumber1);
-              await AsyncStorage.setItem('username', userfullName);
-              await AsyncStorage.setItem('userreferCode', userreferCode);
-            } else {
-              showToastMessage(ResData.message, 'danger');
-            }
-          } catch (error) {
-            // // console.log(error);
-            showToastMessage('Network Error', 'danger');
-          }
-        } else {
-          showToastMessage('Please Fill All Data', 'danger');
+      console.log('res submit-----', res);
+      if (res && res?.success) {
+        showToastMessage(res?.message, 'success');
+        if (resumeFile) {
+          setShowWorkExperienceForm(true);
         }
-      } else {
-        showToastMessage(res?.message || 'Something went wrong', 'danger');
       }
+      // if (res && res.type === 'success') {
+      //   if (userId !== '') {
+      //     const formdata = {user_id: userId};
+
+      //     try {
+      //       const response = await fetch(
+      //         'https://jobipo.com/api/v2/auto-login',
+      //         {
+      //           method: 'POST',
+      //           headers: {
+      //             'Content-Type': 'application/json',
+      //           },
+      //           body: JSON.stringify(formdata),
+      //         },
+      //       );
+
+      //       const ResData = await response.json();
+
+      //       await AsyncStorage.setItem('UserID', String(ResData.user_id));
+      //       const storedUserId = await AsyncStorage.getItem('UserID');
+      //       // // console.log('Saved userId in AsyncStorage:', storedUserId);
+
+      //       if (ResData.status == 1) {
+      //         // Alert.alert(ResData.message);
+      //         let userToken = String(ResData.token);
+      //         let userfullName = String(ResData.name);
+      //         let userreferCode = String(ResData.referCode);
+      //         let usercontactNumber1 = String(ResData.contact_number);
+      //         showToastMessage(ResData?.message, 'success');
+      //         await signIn(userToken, usercontactNumber1);
+      //         await AsyncStorage.setItem('contactNumber1', usercontactNumber1);
+      //         await AsyncStorage.setItem('username', userfullName);
+      //         await AsyncStorage.setItem('userreferCode', userreferCode);
+      //       } else {
+      //         showToastMessage(ResData.message, 'danger');
+      //       }
+      //     } catch (error) {
+      //       // // console.log(error);
+      //       showToastMessage('Network Error', 'danger');
+      //     }
+      //   } else {
+      //     showToastMessage('Please Fill All Data', 'danger');
+      //   }
+      // } else {
+      //   showToastMessage(res?.message || 'Something went wrong', 'danger');
+      // }
     } catch (error) {
       // console.error('API Error:', error);
       showToastMessage('Failed to submit. Please try again later.', 'danger');
@@ -488,44 +489,49 @@ const RegistrationS = ({navigation, route}) => {
     // Submit the original form with work experience data
     try {
       const storedUserId = await AsyncStorage.getItem('UserID');
+      const jobseekerIdP = await AsyncStorage.getItem('jobseekerId');
       const {fromOtpParam} = route?.params || {};
-      const jobseekerId = fromOtpParam?.jobseekerId || data?.jobseekerId || '';
+      const jobseekerId = fromOtpParam?.jobseekerId || jobseekerIdP || '';
 
-      const form = new FormData();
+      // Transform workExperiences to match the expected API format
+      const experiences = workExperiences.map((exp, index) => ({
+        jobTitle: 'react native developer',
+        jobRole: exp.jobRole || '',
+        companyName: exp.companyName || '',
+        currentlyWorking: '',
+        employmentType: '',
+        industry: exp.industry || '',
+        startDate: '',
+        endDate: '',
+        preferred_job_Title: '',
+        currentSalary: currentSalary || '',
+        workMode: '',
+        experienceLevel: '',
+        preferred_job_industry: formData.preferred_job_industry || '',
+        yearOfCompletion: '',
+        totalWorkingMonths: exp.workingDuration || '',
+        skills: JSON.stringify(selectedSkills || []),
+        location: exp.location || '',
+        updateIndex: String(index + 1),
+      }));
 
-      // Add text fields according to API format
-      form.append('userId', userId || storedUserId || '');
-      form.append('jobseekerId', jobseekerId ? jobseekerId : '');
-      form.append('totalExperience', experience);
-      form.append('preferredJobIndustry', formData.preferred_job_industry);
-      form.append('jobTitle', data?.jobTitle || formData?.jobTitle || '');
-      form.append('current_salary', currentSalary || '');
-      form.append('workExperiences', JSON.stringify(workExperiences));
-
-      // Add resume file
-      if (resumeFile) {
-        const fileUri =
-          resumeFile.uri || resumeFile.fileCopyUri || resumeFile.path;
-        const fileName = resumeFileName || resumeFile.name || 'resume.pdf';
-        const fileType = resumeFile.type || 'application/pdf';
-
-        form.append('cv', {
-          uri: fileUri,
-          type: fileType,
-          name: fileName,
-        });
-      } else {
-        form.append('cv', '');
-      }
-
+      // Create the request payload with userId, jobseekerId, and experiences
+      const requestPayload = {
+        userId: Number(userId || storedUserId || ''),
+        jobseekerId: Number(jobseekerId),
+        experiences: experiences,
+      };
+      console.log('requestPayload', JSON.stringify(requestPayload));
+      // return;
       const response = await fetch(
-        'https://jobipo.com/api/v3/candidate-update-step-three',
+        'https://jobipo.com/api/v3/candidate-update-step-four',
         {
           headers: {
+            'Content-Type': 'application/json',
             Authorization: `Bearer ${AUTH_TOKEN}`,
           },
           method: 'POST',
-          body: form,
+          body: JSON.stringify(requestPayload),
         },
       );
 
@@ -534,47 +540,58 @@ const RegistrationS = ({navigation, route}) => {
       const jsonEnd = rawText.lastIndexOf('}');
       const jsonString = rawText.substring(jsonStart, jsonEnd + 1);
       const res = JSON.parse(jsonString);
+      if (res && res?.success) {
+        console.log('res--1-1---dd--', res);
+        let username = await AsyncStorage.getItem('username');
+        console.log('username-=-=-=-=-', username);
+        let Token = await AsyncStorage.getItem('Token');
+        console.log('Token-=-=-=-=-', Token);
 
-      if (res && res.type === 'success') {
-        if (userId !== '') {
-          const formdata = {user_id: userId};
+        showToastMessage(res?.message, 'success');
 
-          try {
-            const response = await fetch(
-              'https://jobipo.com/api/v2/auto-login',
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formdata),
-              },
-            );
+        await signIn(String(Token), username);
+        // navigation.navigate('JobPage');
+        // handleSetRoot({name: 'JobPage'});
+        // if (userId !== '') {
+        //   const formdata = {user_id: Number(userId || storedUserId || '')};
+        //   console.log('formdata', formdata);
+        //   try {
+        //     const response = await fetch(
+        //       'https://jobipo.com/api/v2/auto-login',
+        //       {
+        //         method: 'POST',
+        //         headers: {
+        //           'Content-Type': 'application/json',
+        //         },
+        //         body: JSON.stringify(formdata),
+        //       },
+        //     );
 
-            const ResData = await response.json();
+        //     const ResData = await response.json();
+        //     console.log('ResData-=-=-=-=-=', ResData);
+        //     return;
+        //     await AsyncStorage.setItem('UserID', String(ResData.user_id));
+        //     const storedUserId = await AsyncStorage.getItem('UserID');
 
-            await AsyncStorage.setItem('UserID', String(ResData.user_id));
-            const storedUserId = await AsyncStorage.getItem('UserID');
-
-            if (ResData.status == 1) {
-              let userToken = String(ResData.token);
-              let userfullName = String(ResData.name);
-              let userreferCode = String(ResData.referCode);
-              let usercontactNumber1 = String(ResData.contact_number);
-              showToastMessage(ResData?.message, 'success');
-              await signIn(userToken, usercontactNumber1);
-              await AsyncStorage.setItem('contactNumber1', usercontactNumber1);
-              await AsyncStorage.setItem('username', userfullName);
-              await AsyncStorage.setItem('userreferCode', userreferCode);
-            } else {
-              showToastMessage(ResData.message, 'danger');
-            }
-          } catch (error) {
-            showToastMessage('Network Error', 'danger');
-          }
-        } else {
-          showToastMessage('Please Fill All Data', 'danger');
-        }
+        //     if (ResData.status == 1) {
+        //       let userToken = String(ResData.token);
+        //       let userfullName = String(ResData.name);
+        //       let userreferCode = String(ResData.referCode);
+        //       let usercontactNumber1 = String(ResData.contact_number);
+        //       // showToastMessage(ResData?.message, 'success');
+        //       await signIn(userToken, usercontactNumber1);
+        //       await AsyncStorage.setItem('contactNumber1', usercontactNumber1);
+        //       await AsyncStorage.setItem('username', userfullName);
+        //       await AsyncStorage.setItem('userreferCode', userreferCode);
+        //     } else {
+        //       showToastMessage(ResData.message, 'danger');
+        //     }
+        //   } catch (error) {
+        //     showToastMessage('Network Error', 'danger');
+        //   }
+        // } else {
+        //   showToastMessage('Please Fill All Data', 'danger');
+        // }
       } else {
         showToastMessage(res?.message || 'Something went wrong', 'danger');
       }
@@ -902,6 +919,9 @@ const RegistrationS = ({navigation, route}) => {
 
                 <TouchableOpacity
                   style={styles.continueBtn}
+                  // onPress={() => {
+                  //   setShowWorkExperienceForm(false);
+                  // }}>
                   onPress={handleWorkExperienceSubmit}>
                   <Text style={styles.continueText}>Submit</Text>
                 </TouchableOpacity>

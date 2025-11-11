@@ -27,29 +27,11 @@ const TopHeaderJob = ({handleReferPress}) => {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
-  const [photo, setPhoto] = useState('');
-  const [users, setUsers] = useState([]);
-  const [jobseekers, setJobseekers] = useState([]);
+  const [userData, setUserData] = useState('');
 
   useFocusEffect(
     useCallback(() => {
-      const GetDataFunc = async () => {
-        try {
-          const res = await fetch('https://jobipo.com/api/Agent/index');
-          const sliderDataApi = await res.json();
-          if (sliderDataApi?.logout !== 1) {
-            const parsedMsg = JSON.parse(sliderDataApi?.msg);
-            console.log('parsedMsg?.users-=-==--=-=', parsedMsg?.users);
-            setUsers(parsedMsg?.users);
-            if (parsedMsg?.jobseeker) setJobseekers(parsedMsg.jobseeker);
-          }
-        } catch (err) {
-          // // console.log('❌ Fetch Error:', err);
-          showToastMessage('Please check your internet connection.');
-        }
-      };
       fetchProfile();
-      GetDataFunc();
     }, []),
   );
   const fetchProfile = async () => {
@@ -70,7 +52,7 @@ const TopHeaderJob = ({handleReferPress}) => {
       const data = await response.json();
       console.log('data------1-----', data);
 
-      setPhoto(data?.data?.photo || null);
+      setUserData(data || null);
 
       try {
         const decoded = JSON.parse(JSON.parse(data.data.languageKnown));
@@ -85,6 +67,7 @@ const TopHeaderJob = ({handleReferPress}) => {
     {title: 'Affiliate', link: 'Home', subLink: ['ID', 'Visiting']},
   ];
 
+  console.log('user-----====-', userData);
   return (
     <View style={[styles.wrapper, {paddingTop: insets.top}]}>
       {/* <StatusBar barStyle="light-content" backgroundColor="#FF8D53" /> */}
@@ -122,21 +105,23 @@ const TopHeaderJob = ({handleReferPress}) => {
       {/* Profile Section */}
       <View style={styles.profileContainer}>
         <View style={{marginVertical: 6}}>
-          {photo ? (
-            <ImageLoadView
-              resizeMode="cover"
-              source={{uri: photo}}
-              style={styles.profileImage}
-            />
-          ) : (
-            <CircleBorderIcon />
-          )}
+          <ImageLoadView
+            resizeMode="cover"
+            source={
+              userData?.data?.photo
+                ? {uri: userData?.data?.photo}
+                : imagePath.user
+            }
+            style={styles.profileImage}
+          />
         </View>
 
         <View style={styles.profileText}>
-          <Text style={styles.profileName}>{users['fullName']}</Text>
+          <Text style={styles.profileName}>
+            {userData?.data?.userName || 'jobipo'}
+          </Text>
           <Text style={styles.profilePosition}>
-            {jobseekers['preferred_job_Title']}
+            {userData?.data?.preferredJobTitle}
           </Text>
         </View>
         {/* <Pressable style={{marginRight: 10}} onPress={handleReferPress}>

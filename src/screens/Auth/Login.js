@@ -204,6 +204,10 @@ const Login = ({navigation}) => {
 
           <View style={styles.lastInfo}>
             <Text style={styles.lastInfoText}>Don’t have an account?</Text>
+            {/* <Pressable
+              onPress={() =>
+                navigation.navigate('RegistrationS', {fromOtpParam: ''})
+              }> */}
             <Pressable onPress={() => navigation.navigate('Register')}>
               <Text
                 style={[

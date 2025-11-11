@@ -13,7 +13,10 @@ import {
   Animated,
   Dimensions,
   Platform,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
+import Video from 'react-native-video';
 import {useFocusEffect} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // If you are using react-native-vector-icons for the checkbox checkmark
@@ -36,6 +39,9 @@ import fonts from '../../theme/fonts';
 import SmsRetriever, {
   useSMSRetriever,
 } from '@ebrimasamba/react-native-sms-retriever';
+import {setData} from '../../appRedux/apis/keyChain';
+import {setGlobalUserToken, setUserData} from '../../utils/helper';
+import {kUserData, kUserToken} from '../../appRedux/apis/commonValue';
 
 // Dummy Button Component (Replace with your actual Button component if you have one)
 const Button = ({onPress, text, style}) => (
@@ -56,6 +62,9 @@ const Register = ({navigation, route}) => {
   const [ShowSubmit, setShowSubmit] = useState(1);
   const [timer, setTimer] = useState(30);
   const [isOtpSent, setIsOtpSent] = useState(false);
+  const [showVideoModal, setShowVideoModal] = useState(false);
+  const [isVideoPaused, setIsVideoPaused] = useState(false);
+  const [isVideoLoading, setIsVideoLoading] = useState(false);
 
   // New states for location, date of birth, and gender
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -233,39 +242,6 @@ const Register = ({navigation, route}) => {
       };
       console.log('obj==1==1=', obj);
 
-      // dispatch(loadingShow(true));
-      // try {
-      //   const ResData = await fetch(
-      //     'https://jobipo.com/api/v3/sign-up-process',
-      //     {
-      //       method: 'POST',
-      //       headers: {
-      //         'Content-Type': 'application/json',
-      //         Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
-      //       },
-      //       body: JSON.stringify(dic),
-      //     },
-      //   );
-      //   console.log('checkOtp response:----', ResData);
-
-      //   dispatch(loadingShow(false));
-      //   navigation.navigate('OtpScreen', {registerObj: obj});
-      //   if (ResData.type === 'success') {
-      //     // Alert.alert('OTP Verified Successfully');
-      //     navigation.navigate('RegistrationP');
-      //     return true;
-      //   } else {
-      //     showToastMessage(ResData.msg || 'Invalid OTP.');
-      //     return false;
-      //   }
-      // } catch (err) {
-      //   dispatch(loadingShow(false));
-
-      //   console.log('checkOtp error:-----', err);
-      //   return false;
-      // } finally {
-      //   dispatch(loadingShow(false));
-      // }
       dispatch(checkUserApi(obj)).then(response => {
         if (response?.success) {
           console.log('responseresponse', response);
@@ -311,13 +287,13 @@ const Register = ({navigation, route}) => {
 
   // Handle location selection callback from LocationPicker screen
   const handleLocationPickerResult = useCallback(
-    (current_location, lat, lng, city, state, pincode, area) => {
+    (current_location, lat, lng, city, state, pincode, area, selectedState) => {
       console.log('=== handleLocationPickerResult called ===');
       console.log('current_location:', current_location);
       console.log('lat:', lat);
       console.log('lng:', lng);
       console.log('city:', city);
-      console.log('state:', state);
+      console.log('state:', state || selectedState);
       console.log('pincode:', pincode);
       console.log('area:', area);
 
@@ -340,9 +316,9 @@ const Register = ({navigation, route}) => {
         setLocationCity(city);
         methodSetupAccountRequest('city', city);
       }
-      if (state) {
-        setLocationState(state);
-        methodSetupAccountRequest('state', state);
+      if (state || selectedState) {
+        setLocationState(state || selectedState);
+        methodSetupAccountRequest('state', state || selectedState);
       }
       if (pincode) {
         setPincode(pincode);
@@ -432,6 +408,7 @@ const Register = ({navigation, route}) => {
         pincode: accountReq?.pincode || pincode,
         dob: accountReq?.dateOfBirth,
         gender: accountReq?.gender,
+        appHash: appHash,
       },
     };
     console.log('formdata----', formdata);
@@ -453,6 +430,23 @@ const Register = ({navigation, route}) => {
       console.log('checkOtp response:', ResData);
 
       if (ResData?.success) {
+        await AsyncStorage.setItem('Token', String(ResData.token));
+        // setData(kUserData, ResData);
+        // setUserData(ResData);
+        // if (ResData?.token) {
+        //   global.userToken = ResData?.token;
+        //   setData(kUserToken, ResData);
+        //   setGlobalUserToken(ResData?.token);
+        // }
+
+        await AsyncStorage.setItem('username', accountReq?.fullName);
+        await AsyncStorage.setItem('UserID', String(ResData.userId));
+        await AsyncStorage.setItem('jobseekerId', String(ResData.jobseekerId));
+
+        showToastMessage(
+          ResData?.message || 'OTP Verified Successfully',
+          'success',
+        );
         // Alert.alert('OTP Verified Successfully');
         navigation.navigate('RegistrationP', {fromOtpParam: ResData});
         return true;
@@ -680,14 +674,53 @@ const Register = ({navigation, route}) => {
 
   // // console.log('isOtpSent:', isOtpSent);
 
+  const handleNeedHelp = () => {
+    const whatsappUrl =
+      'https://api.whatsapp.com/send?phone=919351111859&text=hello';
+    Linking.openURL(whatsappUrl).catch(err =>
+      showToastMessage('Unable to open WhatsApp', 'danger'),
+    );
+  };
+
+  const handleShowVideo = () => {
+    setShowVideoModal(true);
+    setIsVideoPaused(false);
+  };
+
+  const handleCloseVideo = () => {
+    setShowVideoModal(false);
+    setIsVideoPaused(true);
+  };
+
   return (
     <View style={styles.Viewcontainer}>
+      {/* Need Help Button - Top Right */}
+
       <KeyboardScroll
         contentContainerStyle={{flexGrow: 1}}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
         extraScrollHeight={20}>
         <View style={styles.container}>
+          <View style={styles.topButtonsContainer}>
+            <View style={styles.needHelpContainer}>
+              <Pressable
+                hitSlop={10}
+                onPress={handleNeedHelp}
+                style={styles.needHelpButton}>
+                <Text style={styles.needHelpText}>Need Help?</Text>
+              </Pressable>
+            </View>
+            <View style={styles.videoHelpContainer}>
+              <Pressable
+                hitSlop={10}
+                onPress={handleShowVideo}
+                style={styles.videoHelpButton}>
+                <Icon name="play-circle-outline" size={20} color="#FF8D53" />
+                <Text style={styles.videoHelpText}>Watch Tutorial</Text>
+              </Pressable>
+            </View>
+          </View>
           {!isOtpSent && (
             <View style={{alignItems: 'center', padding: 36}}>
               <StepIndicator1 />
@@ -1091,6 +1124,52 @@ const Register = ({navigation, route}) => {
           buttonColor={'#FF8D53'}
         />
       )}
+
+      {/* Video Tutorial Modal */}
+      <Modal
+        visible={showVideoModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseVideo}>
+        <View style={styles.videoModalContainer}>
+          <View style={styles.videoModalContent}>
+            <View style={styles.videoModalHeader}>
+              <Text style={styles.videoModalTitle}>
+                Signup Process Tutorial
+              </Text>
+              <Pressable onPress={handleCloseVideo} style={styles.closeButton}>
+                <Icon name="close" size={24} color="#000" />
+              </Pressable>
+            </View>
+            <View style={styles.videoPlayerContainer}>
+              {isVideoLoading && (
+                <View style={styles.videoLoadingContainer}>
+                  <ActivityIndicator size="large" color="#FF8D53" />
+                </View>
+              )}
+              <Video
+                source={{
+                  uri: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', // Replace with your actual signup tutorial video URL
+                }}
+                style={styles.videoPlayer}
+                resizeMode="contain"
+                controls={true}
+                paused={isVideoPaused}
+                onLoadStart={() => setIsVideoLoading(true)}
+                onLoad={() => setIsVideoLoading(false)}
+                onError={error => {
+                  setIsVideoLoading(false);
+                  showToastMessage('Error loading video', 'danger');
+                  console.error('Video error:', error);
+                }}
+                onEnd={() => {
+                  setIsVideoPaused(true);
+                }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1555,6 +1634,96 @@ const styles = StyleSheet.create({
     color: '#E01E61',
     marginHorizontal: 20,
     bottom: 2,
+  },
+  topButtonsContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 10,
+    right: 20,
+    zIndex: 1000,
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+  },
+  needHelpContainer: {
+    // Container for Need Help button
+  },
+  needHelpButton: {
+    // backgroundColor: '#FF8D53',
+    // shadowColor: '#000',
+    // shadowOffset: {width: 0, height: 2},
+    // shadowOpacity: 0.2,
+    // shadowRadius: 4,
+    // elevation: 4,
+  },
+  needHelpText: {
+    color: '#FF8D53',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  videoHelpContainer: {
+    // Container for Video Tutorial button
+  },
+  videoHelpButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 15,
+    backgroundColor: '#FFF5F0',
+  },
+  videoHelpText: {
+    color: '#FF8D53',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  videoModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoModalContent: {
+    width: '95%',
+    maxWidth: Dimensions.get('window').width - 40,
+    backgroundColor: '#000',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  videoModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: '#fff',
+  },
+  videoModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+  },
+  closeButton: {
+    padding: 5,
+  },
+  videoPlayerContainer: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#000',
+    position: 'relative',
+  },
+  videoPlayer: {
+    width: '100%',
+    height: '100%',
+  },
+  videoLoadingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
   },
 });
 

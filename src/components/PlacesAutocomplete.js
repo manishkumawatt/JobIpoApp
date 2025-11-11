@@ -129,6 +129,7 @@ export default function PlacesAutocomplete({
         `https://maps.googleapis.com/maps/api/place/details/json?${qs}`,
       );
       const json = await res.json();
+      console.log('jsonjsonjsonjsonjson-', json);
       const result = json?.result || {};
       // Prefer concise city/state/country from components
       const components = result?.address_components || [];
@@ -140,7 +141,7 @@ export default function PlacesAutocomplete({
       const country = components.find(c =>
         (c.types || []).includes('country'),
       )?.short_name;
-
+      console.log('citycitycity', city);
       // Enhanced pincode extraction with multiple methods
       let extractedPincode = pincode;
 

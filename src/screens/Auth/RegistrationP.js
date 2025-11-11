@@ -253,6 +253,7 @@ const RegistrationP = ({navigation, route}) => {
             {
               method: 'GET',
               headers: {
+                'Content-Type': 'application/json',
                 Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
               },
             },
@@ -347,7 +348,7 @@ const RegistrationP = ({navigation, route}) => {
     // }
     try {
       const storedUserId = await AsyncStorage.getItem('UserID');
-
+      console.log('storedUserId=--==', storedUserId);
       // Convert "Post Graduate" to "Postgraduate" for API
       let educationLevel = educationData.educationLevel;
       if (educationLevel === 'Post Graduate') {
@@ -358,7 +359,7 @@ const RegistrationP = ({navigation, route}) => {
 
       // Prepare the data object matching API format
       const requestData = {
-        userId: parseInt(formData.userId || storedUserId),
+        userId: storedUserId,
         educationLevel: educationLevel,
         collegeName: educationData.collegeName || '',
         degree: educationData.degree || '',
@@ -369,19 +370,30 @@ const RegistrationP = ({navigation, route}) => {
         skills: selectedSkills || [],
         englishSpeaking: englishSpeaking || '',
         jobseekerId: fromOtpParam?.jobseekerId ? fromOtpParam?.jobseekerId : '',
+        // userId: 257355,
+        // jobseekerId: 125320,
+        // educationLevel: 'Postgraduate',
+        // collegeName: 'Mumbai University',
+        // degree: 'M.Tech',
+        // specialization: 'Information Technology',
+        // educationType: 'Full-time',
+        // startDate: '2018-06-01',
+        // endDate: '2020-05-30',
+        // skills: ['Python', 'Data Analysis'],
+        // englishSpeaking: 'Basic',
       };
 
-      console.log('API Request Data:', JSON.stringify(requestData, null, 2));
-
-      // Send as FormData with 'raw' field containing JSON string
-      const form = new FormData();
-      form.append('raw', JSON.stringify(requestData));
+      console.log('API Request Data:----', JSON.stringify(requestData));
 
       const response = await fetch(
         'https://jobipo.com/api/v3/candidate-update-step-two',
         {
           method: 'POST',
-          body: form,
+          body: JSON.stringify(requestData),
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          },
         },
       );
 
@@ -406,10 +418,13 @@ const RegistrationP = ({navigation, route}) => {
         return;
       }
 
-      // // console.log('API response:', res);
+      console.log('API response:---', res);
 
-      if (res && res.type === 'success') {
+      if (res && res?.success) {
+        await AsyncStorage.setItem('UserID', String(res?.userId));
+
         // Alert.alert('Success', 'Details saved successfully');
+        showToastMessage(res?.message, 'success');
         navigation.navigate('RegistrationS', {fromOtpParam: fromOtpParam});
       } else {
         const message =

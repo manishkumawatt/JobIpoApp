@@ -105,7 +105,7 @@ const JobBox = memo(
     const handleToggleFavorite = useCallback(() => {
       onToggleFavorite(item.jobId);
     }, [onToggleFavorite, item.jobId]);
-
+    console.log('item===', item);
     return (
       <View style={[styles.jobBox, isActive && styles.activeJobBox]}>
         <TouchableOpacity onPress={handlePress} activeOpacity={0.8}>
@@ -285,6 +285,18 @@ const JobPage = ({navigation, route}) => {
   // Navigation state
   const [hasInitialized, setHasInitialized] = useState(false);
   const [isReturningFromDetail, setIsReturningFromDetail] = useState(false);
+
+  // Sticky header scroll state
+  const lastScrollY = useRef(0);
+  const carouselTranslateY = useRef(new Animated.Value(0)).current;
+  const carouselOpacity = useRef(new Animated.Value(1)).current;
+  const searchBarMarginTop = useRef(new Animated.Value(90)).current;
+  const listPaddingTop = useRef(new Animated.Value(86)).current;
+  const [listPaddingTopValue, setListPaddingTopValue] = useState(1);
+  const [isCarouselVisible, setIsCarouselVisible] = useState(true);
+  const isScrollingDown = useRef(false);
+  const scrollOffset = useRef(0);
+  const isAnimating = useRef(false);
 
   // Constants
   const screenHeight = Dimensions.get('window').height;
@@ -573,7 +585,9 @@ const JobPage = ({navigation, route}) => {
             ...currentFilter,
           };
         }
-        const data = await makeApiRequest('/view-job-list', {
+        console.log('requestBody-==-==-', requestBody);
+        // const data = await makeApiRequest('/view-job-list', {
+        const data = await makeApiRequest('/view-job-list-new', {
           method: 'POST',
           body: JSON.stringify(requestBody),
         });
@@ -687,6 +701,17 @@ const JobPage = ({navigation, route}) => {
       }
     };
   }, []);
+
+  // Listen to listPaddingTop animated value changes
+  useEffect(() => {
+    const listenerId = listPaddingTop.addListener(({value}) => {
+      console.log('value-----', value);
+      setListPaddingTopValue(value);
+    });
+    return () => {
+      listPaddingTop.removeListener(listenerId);
+    };
+  }, [listPaddingTop]);
 
   const requestUserPermission = async () => {
     const authStatus = await getMessaging().requestPermission();
@@ -948,6 +973,92 @@ const JobPage = ({navigation, route}) => {
     await fetchJobs(true);
   }, [fetchJobs, isFetchingMore]);
 
+  // Handle scroll for sticky carousel
+  const handleScroll = useCallback(
+    event => {
+      const currentScrollY = event.nativeEvent.contentOffset.y;
+      scrollOffset.current = currentScrollY;
+      const scrollDifference = currentScrollY - lastScrollY.current;
+
+      // Prevent animation if already animating
+      if (isAnimating.current) {
+        lastScrollY.current = currentScrollY;
+        return;
+      }
+
+      // Only trigger if scroll difference is significant (more than 8 pixels)
+      if (Math.abs(scrollDifference) > 8) {
+        const scrollingDown = scrollDifference > 0;
+
+        // Only animate if direction changed or at the top
+        if (scrollingDown !== isScrollingDown.current || currentScrollY < 10) {
+          isScrollingDown.current = scrollingDown;
+          isAnimating.current = true;
+
+          // Show carousel when scrolling up or at the top
+          if (!scrollingDown || currentScrollY < 10) {
+            // Show carousel and adjust search bar/list
+            Animated.parallel([
+              Animated.timing(carouselTranslateY, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+              Animated.timing(carouselOpacity, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+              Animated.timing(searchBarMarginTop, {
+                toValue: 90, // Original position (carousel height + margin)
+                duration: 200,
+                useNativeDriver: false,
+              }),
+              Animated.timing(listPaddingTop, {
+                toValue: 1, // Original padding (carousel height + margin)
+                duration: 200,
+                useNativeDriver: false,
+              }),
+            ]).start(() => {
+              isAnimating.current = false;
+              setIsCarouselVisible(true);
+            });
+          } else {
+            // Hide carousel when scrolling down and adjust search bar/list
+            Animated.parallel([
+              Animated.timing(carouselTranslateY, {
+                toValue: -86, // Hide completely (70px height + 16px top margin)
+                duration: 200,
+                useNativeDriver: true,
+              }),
+              Animated.timing(carouselOpacity, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+              Animated.timing(searchBarMarginTop, {
+                toValue: 4, // Small margin to account for container padding
+                duration: 200,
+                useNativeDriver: false,
+              }),
+              Animated.timing(listPaddingTop, {
+                toValue: 0, // No padding when carousel is hidden
+                duration: 200,
+                useNativeDriver: false,
+              }),
+            ]).start(() => {
+              isAnimating.current = false;
+              setIsCarouselVisible(false);
+            });
+          }
+        }
+      }
+
+      lastScrollY.current = currentScrollY;
+    },
+    [carouselTranslateY, carouselOpacity, searchBarMarginTop, listPaddingTop],
+  );
+
   const FilterButton = memo(() => (
     <TouchableOpacity
       style={styles.searchButton}
@@ -978,8 +1089,15 @@ const JobPage = ({navigation, route}) => {
           <Text style={styles.buttonText}>Refer</Text>
         </TouchableOpacity> */}
 
-        {/* Auto-scrolling Carousel */}
-        <View style={styles.carouselContainer}>
+        {/* Auto-scrolling Carousel - Sticky Header */}
+        <Animated.View
+          style={[
+            styles.carouselContainer,
+            {
+              transform: [{translateY: carouselTranslateY}],
+              opacity: carouselOpacity,
+            },
+          ]}>
           <Carousel
             loop
             width={Dimensions.get('window').width - 30}
@@ -1008,9 +1126,13 @@ const JobPage = ({navigation, route}) => {
               </TouchableOpacity>
             )}
           />
-        </View>
+        </Animated.View>
 
-        <View style={[styles.row, {marginTop: 4, paddingHorizontal: 8}]}>
+        <Animated.View
+          style={[
+            styles.row,
+            {marginTop: searchBarMarginTop, paddingHorizontal: 8},
+          ]}>
           <View style={styles.inputWithIcon}>
             <TextInput
               style={styles.input}
@@ -1074,9 +1196,13 @@ const JobPage = ({navigation, route}) => {
             )}
           </View>
           <FilterButton />
-        </View>
+        </Animated.View>
         {totalRecords > 0 && (
-          <View style={{marginHorizontal: 15, marginBottom: 10}}>
+          <View
+            style={{
+              marginHorizontal: 15,
+              marginBottom: isCarouselVisible ? 10 : 4,
+            }}>
             <Text style={styles.recordsSummaryText}>
               {`${'we have found ' + `${totalRecords}` + ' ' + (totalRecords === 1 ? 'job' : 'jobs') + ' for you.'}`}
             </Text>
@@ -1687,8 +1813,13 @@ const JobPage = ({navigation, route}) => {
           <MemoryOptimizedFlatList
             data={deduplicatedJobs}
             keyExtractor={keyExtractor}
-            contentContainerStyle={styles.listContainer}
+            contentContainerStyle={[
+              styles.listContainer,
+              {paddingTop: listPaddingTopValue},
+            ]}
             renderItem={renderJobItem}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
             onEndReached={() => {
               if (
                 hasMoreJobs &&
@@ -2298,11 +2429,16 @@ const styles = StyleSheet.create({
   },
   // Carousel styles
   carouselContainer: {
-    marginHorizontal: 15,
+    position: 'absolute',
+    top: 16,
+    left: 15,
+    right: 15,
+    zIndex: 1000,
+    marginHorizontal: 0,
     marginBottom: 10,
     borderRadius: 12,
     overflow: 'hidden',
-    elevation: 3,
+    elevation: 5,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.25,

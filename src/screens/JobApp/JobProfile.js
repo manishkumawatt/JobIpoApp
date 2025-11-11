@@ -2,29 +2,19 @@ import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
-  Image,
   Keyboard,
   ScrollView,
   Pressable,
   StyleSheet,
-  Modal,
-  Button,
   TextInput,
   TouchableOpacity,
   FlatList,
-  Alert,
   Platform,
 } from 'react-native';
-// import Icon from 'react-native-vector-icons/Ionicons';
-import JobHeader from '../../components/Job/JobHeader';
 import JobMenu from '../../components/Job/JobMenu';
-import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import IconA from 'react-native-vector-icons/MaterialIcons';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
-import IconD from 'react-native-vector-icons/FontAwesome';
-import DotIcon from 'react-native-vector-icons/Entypo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {useColorScheme} from 'react-native';
 import {Picker} from '@react-native-picker/picker';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {
@@ -33,42 +23,39 @@ import {
   VerticalDashedLine,
   UploadArrowIcon,
   SmallGrayCircle,
-  SpeakerProfileIcon,
   LockIcon,
 } from '../JobSvgIcons';
-import PlacesAutocomplete from '../../components/PlacesAutocomplete';
 import SimpleHeader from '../../components/SimpleHeader';
-import {launchImageLibrary} from 'react-native-image-picker';
-import axios from 'axios';
 import ImagePicker from 'react-native-image-crop-picker';
-import GooglePlacesInput from '../../components/GooglePlacesInput';
-import {KeyboardAwareScrollView} from 'react-native-keyboard-aware-scroll-view';
 import {KeyboardScroll} from '../../component';
 import {showToastMessage} from '../../utils/Toast';
 import ImageLoadView from '../../utils/imageLoadView';
 import moment from 'moment';
 import DatePicker from 'react-native-date-picker';
+import fonts from '../../theme/fonts';
+import Pdf from 'react-native-pdf';
+import {pick, types} from '@react-native-documents/picker';
+import {permissionConfirm} from '../../utils/alertController';
+import {
+  check,
+  openSettings,
+  PERMISSIONS,
+  request,
+  RESULTS,
+} from 'react-native-permissions';
 
 const JobProfile = () => {
-  const [currentField, setCurrentField] = useState('');
   const [inputValue, setInputValue] = useState('');
   const [focusedInput, setFocusedInput] = useState(null);
   const [locationSelected, setLocationSelected] = useState(false);
-  const [certifications, setCertifications] = useState([]);
   const [users, setUsers] = useState([]);
-  const [experience, setExperience] = useState('1 year');
-  const [salary, setSalary] = useState('₹ 1,20,000');
-  const [noticePeriod, setNoticePeriod] = useState('Less than 15 days');
   const [certification, setCertification] = useState('');
   const [cv, setCV] = useState('');
-  const [pic, setPic] = useState(
-    'iVBORw0KGgoAAAANSUhEUgAAAgAAAAIAAgMAAACJFjxpAAAADFBMVEXFxcX////p6enW1tbAmiBwAAAFiElEQVR4AezAgQAAAACAoP2pF6kAAAAAAAAAAAAAAIDbu2MkvY0jiuMWWQoUmI50BB+BgRTpCAz4G6C8CJDrC3AEXGKPoMTlYA/gAJfwETawI8cuBs5Nk2KtvfiLW+gLfK9m+r3X82G653+JP/zjF8afP1S//y+An4/i51//AsB4aH+/QPD6EQAY/zwZwN8BAP50bh786KP4+VT+3fs4/noigEc+jnHeJrzxX+NWMDDh4g8+EXcnLcC9T8U5S/CdT8bcUeBEIrwBOiI8ki7Ba5+NrePgWUy89/nYyxQ8Iw3f+pWY4h1gb3eAW7sDTPEOsLc7wK1TIeDuDB+I/OA1QOUHv/dFsZQkhKkh4QlEfOULYz2nGj2/Nn1LmwR/86VxlCoAW6kCsHRGANx1RgCMo5Qh2EsZgrXNQZZShp5Liv7Il8eIc5C91EHY2hxk6bwYmNscZIReDBwtCdhbErC1JGBpScBcOgFMLQsZMQs5Whayd+UQsLYsZGlZyNyykKllISNmIUfAwifw8NXvTojAjGFrdYi11SGWVoeYWx1i6lmQCiEjFkKOVgjZ+xxIhZCtFULWHkCqxCw9gNQKmP9vNHzipdEPrRcxtVbAeDkAvve0iM2QozVD9hfjhp4YP/UrkJYDbD2AtBxgfSkAvvHEeNcDSAsilgtAWxIy91J8AXgZAJ5e33+4tuACcAG4AFwALgBXRXQB6AFcB5MXAuA6nl9/0Vx/011/1V5/1/dfTPJvRtdnu/zL6beeFO/7r+fXBYbrEkt/j+i6ytXfpuvvE/ZXOnsA/a3a/l5xf7O6v1t+Xe/vOyz6HpO8yyboM8o7rfJes77bru83THk48p7TvOs27zvOO6/73vO++z7l4cgnMPQzKPopHC0N9noSSz6LJp/Gk88jyicy5TOp6qlc+VyyfDJbPpuuns6XzyfMJzTmMyrrKZ35nNJ8Ums+q7af1tvPK+4nNodEnPKp3fnc8npyez67/qVP7+/fL8hfcMjfsOhf8cjfMclfcnn9+BkOnLECP8Q58OYeyJ40eoyF6Ee/En/JHlP6mIlRVXprF4BxtAvArV0AxtEuALd2ARhHuwDc2gVgHPX/hFv9fMBddjIGeKg/WCxlCsI46u+Ga5mCcJd+sIG9UkGAW32ZbApFAHhod4Bb3eo04h3god0BbiUHYApVCNjbHeBW+QDAXT4a7qg7r7e214057vg0QhkEHkoSwq0kIdydXw4/Q3H8hjYJ3vL0WConBJhCHQaOToeBrU0BljYFmEoVgHGUKgAPnREAt84IgLuqFgAYSUEOAHszDwuAtSkHAZhLGYIpdCLgKGUIHtocZG1zkLmUIRhxDnJU1RDA1uYga5uDzKUOwhTnIEfnxcDe5iBrcyQAYGlzkKkUYhhxDrKXQgxbSwLWUohhbknA1JKAEZOAvSUBW0sC1pYEzC0JmFoSMMJyCDhaFrK3JGDtyiFgaVnI3LKQqWUhI2YhR8tC9paFrC0LWVoWMrcsZGpZyIhZyNGykL2rSIGtlQHWVgZYWhlgbmWAqZUBRiwDHK0MsLcywNbKAGsOoNUhllaHmFsdYmp1iBHrEEerQ+w5gFYI2VodYm11iKXVIeYcQCuETK0QMmIh5MgBtELI3gohWyuErDmAVolZWiFkzgG0SszUKjGjfj6gVmKOVonZcwCtFbB9HQC+ozWDbz1bvGu9iKW1AuYcQOtFTLEX1GbIaFegN0OOHEBrhuw5gNYM2XIArRuz5gDacoB3bTnAEktxXQ4wfw0AvveM8b4tiJjSJOwLIsbXsAKeNeKCiOO3D+AVbUl0AfjGs8ZPbUnIdgFoa1LWC0BblfMuB9AeC1j6gqQE0J9LmC8AOYD2ZMb7i4bt2ZTpWoHfPoB7Tj2fXzT8N1X41vkq/QHOAAAAAElFTkSuQmCC',
-  );
-  const colorScheme = useColorScheme();
-  const textColor = colorScheme === 'dark' ? '#000' : '#000';
-  const isDarkMode = useColorScheme() === 'dark';
+  const [pdfLoadError, setPdfLoadError] = useState(false);
+  const [fileUri, setFileUri] = useState(null);
+  const [fileType, setFileType] = useState('');
+  const [fileName, setFileName] = useState('');
   const [englishSpeaking, setEnglishSpeaking] = useState('');
-  // const [englishLevel, setEnglishLevel] = useState('');
   const [preferredLocations, setPreferredLocations] = useState('');
   const [pllat, setPllat] = useState(null);
   const [pllng, setPllng] = useState(null);
@@ -77,32 +64,13 @@ const JobProfile = () => {
   const [selectedPincode, setSelectedPincode] = useState('');
   const [date, setDate] = useState(new Date());
   const [beginDatePicker, setBeginDatePicker] = useState(false);
-  // Helper function to extract pincode from address string with multiple patterns
-  const extractPincodeFromAddress = address => {
-    if (!address) return '';
-
-    const patterns = [
-      /\b\d{6}\b/g, // 6 digits
-      /\b\d{5,6}\b/g, // 5-6 digits
-      /pincode[:\s]*(\d{6})/i, // "pincode: 123456"
-      /pin[:\s]*(\d{6})/i, // "pin: 123456"
-      /(\d{6})/g, // any 6 digits
-    ];
-
-    for (const pattern of patterns) {
-      const matches = address.match(pattern);
-      if (matches && matches.length > 0) {
-        const sixDigitMatch = matches.find(match => match.length === 6);
-        if (sixDigitMatch) {
-          return sixDigitMatch;
-        }
-      }
-    }
-
-    return '';
-  };
-
-  const [skills, setSkills] = useState([]);
+  // Location detail states
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
+  const [locationCity, setLocationCity] = useState('');
+  const [locationState, setLocationState] = useState('');
+  const [pincode, setPincode] = useState('');
+  const [area, setArea] = useState('');
   const [jobSeekerData, setJobSeekerData] = useState({
     fullName: '',
     gender: '',
@@ -130,7 +98,35 @@ const JobProfile = () => {
     cv: '',
   });
   const [isLoading, setisLoading] = useState(true);
+  const [formData, setFormData] = useState({
+    photo: users?.photo,
+    name: users?.fullName,
+    gender: users?.gender,
+    dateOfBirth: convertApiDateToDisplay(users?.DOB),
+    email: users?.emailID,
+  });
+  const [searchText, setSearchText] = useState('');
+  const [filteredSkills, setFilteredSkills] = useState([]);
+  const [skillOptions, setSkillOptions] = useState([]);
+  const [selectedSkills, setSelectedSkills] = useState([]);
+  const [jobCategories, setJobCategories] = useState([]);
+  const [languages, setLanguages] = useState([]);
+  const [languageKnown, setLanguageKnown] = useState([]);
+  const [employmentType, setEmploymentType] = useState('');
+  const [workMode, setWorkMode] = useState('');
+  const [experienceLevel, setExperienceLevel] = useState('');
+  const [preferredJobTitle, setPreferredJobTitle] = useState('');
+  const [preferredJobIndustry, setPreferredJobIndustry] = useState('');
+  const [currentSalary, setCurrentSalary] = useState('');
+  const [jobTitles, setJobTitles] = useState([]);
+  const [filteredTitles, setFilteredTitles] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [photo, setPhoto] = useState(null);
+  const navigation = useNavigation();
+  const API_BASE_URL = 'https://jobipo.com/api/v3';
+  const AUTH_TOKEN = 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6';
 
+  // Parse and set skills from jobSeekerData
   useFocusEffect(
     useCallback(() => {
       if (
@@ -138,58 +134,36 @@ const JobProfile = () => {
         jobSeekerData?.userID &&
         jobSeekerData?.jobseekerId
       ) {
-        // skills
-        // :
-        // "\"PHP,Python,Jsonxml\""
         try {
-          let rawSkills = jobSeekerData.skills;
+          const rawSkills = jobSeekerData.skills;
           let parsedSkills = [];
 
-          // Handle different formats of skills data
           if (Array.isArray(rawSkills)) {
-            // Already an array
             parsedSkills = rawSkills;
           } else if (typeof rawSkills === 'string') {
-            // Handle string formats
-            if (rawSkills.includes('\\') || rawSkills.includes('"')) {
-              // Try to parse as JSON first
-              try {
-                const jsonParsed = JSON.parse(rawSkills);
-                if (Array.isArray(jsonParsed)) {
-                  parsedSkills = jsonParsed;
-                } else {
-                  // If JSON parsing gives us a string, split by comma
-                  parsedSkills = jsonParsed.split(',').map(s => s.trim());
-                }
-              } catch (jsonErr) {
-                // If JSON parsing fails, treat as comma-separated string
-                parsedSkills = rawSkills.split(',').map(s => s.trim());
-              }
-            } else {
-              // Simple comma-separated string
+            try {
+              const jsonParsed = JSON.parse(rawSkills);
+              parsedSkills = Array.isArray(jsonParsed)
+                ? jsonParsed
+                : jsonParsed.split(',').map(s => s.trim());
+            } catch {
               parsedSkills = rawSkills.split(',').map(s => s.trim());
             }
           }
 
-          // Clean up the skills array
-          const clean = parsedSkills
-            .map(skill => {
-              // Remove quotes and extra whitespace
-              return skill.replace(/^["']|["']$/g, '').trim();
-            })
-            .filter(skill => skill && skill.length > 0); // Remove empty strings
+          const cleanSkills = parsedSkills
+            .map(skill => skill.replace(/^["']|["']$/g, '').trim())
+            .filter(skill => skill && skill.length > 0);
 
-          setSelectedSkills(clean);
-        } catch (err) {
+          setSelectedSkills(cleanSkills);
+        } catch {
           setSelectedSkills([]);
         }
       }
     }, [jobSeekerData]),
   );
-  console.log('users?.DOB', users?.DOB);
   useEffect(() => {
     if (users) {
-      // // console.log('users.pic ', users.photo);
       setFormData({
         photo: users.photo || '',
         name: users.fullName || '',
@@ -199,66 +173,31 @@ const JobProfile = () => {
       });
     }
   }, [users]);
-
-  const [formData, setFormData] = useState({
-    // Pic: users?.Pic || 'iVBORw0KGgoAAAANSUhEUgAAAgAAAAIAAgMAAACJFjxpAAAADFBMVEXFxcX////p6enW1tbAmiBwAAAFiElEQVR4AezAgQAAAACAoP2pF6kAAAAAAAAAAAAAAIDbu2MkvY0jiuMWWQoUmI50BB+BgRTpCAz4G6C8CJDrC3AEXGKPoMTlYA/gAJfwETawI8cuBs5Nk2KtvfiLW+gLfK9m+r3X82G653+JP/zjF8afP1S//y+An4/i51//AsB4aH+/QPD6EQAY/zwZwN8BAP50bh786KP4+VT+3fs4/noigEc+jnHeJrzxX+NWMDDh4g8+EXcnLcC9T8U5S/CdT8bcUeBEIrwBOiI8ki7Ba5+NrePgWUy89/nYyxQ8Iw3f+pWY4h1gb3eAW7sDTPEOsLc7wK1TIeDuDB+I/OA1QOUHv/dFsZQkhKkh4QlEfOULYz2nGj2/Nn1LmwR/86VxlCoAW6kCsHRGANx1RgCMo5Qh2EsZgrXNQZZShp5Liv7Il8eIc5C91EHY2hxk6bwYmNscZIReDBwtCdhbErC1JGBpScBcOgFMLQsZMQs5Whayd+UQsLYsZGlZyNyykKllISNmIUfAwifw8NXvTojAjGFrdYi11SGWVoeYWx1i6lmQCiEjFkKOVgjZ+xxIhZCtFULWHkCqxCw9gNQKmP9vNHzipdEPrRcxtVbAeDkAvve0iM2QozVD9hfjhp4YP/UrkJYDbD2AtBxgfSkAvvHEeNcDSAsilgtAWxIy91J8AXgZAJ5e33+4tuACcAG4AFwALgBXRXQB6AFcB5MXAuA6nl9/0Vx/011/1V5/1/dfTPJvRtdnu/zL6beeFO/7r+fXBYbrEkt/j+i6ytXfpuvvE/ZXOnsA/a3a/l5xf7O6v1t+Xe/vOyz6HpO8yyboM8o7rfJes77bru83THk48p7TvOs27zvOO6/73vO++z7l4cgnMPQzKPopHC0N9noSSz6LJp/Gk88jyicy5TOp6qlc+VyyfDJbPpuuns6XzyfMJzTmMyrrKZ35nNJ8Ums+q7af1tvPK+4nNodEnPKp3fnc8npyez67/qVP7+/fL8hfcMjfsOhf8cjfMclfcnn9+BkOnLECP8Q58OYeyJ40eoyF6Ee/En/JHlP6mIlRVXprF4BxtAvArV0AxtEuALd2ARhHuwDc2gVgHPX/hFv9fMBddjIGeKg/WCxlCsI46u+Ga5mCcJd+sIG9UkGAW32ZbApFAHhod4Bb3eo04h3god0BbiUHYApVCNjbHeBW+QDAXT4a7qg7r7e214057vg0QhkEHkoSwq0kIdydXw4/Q3H8hjYJ3vL0WConBJhCHQaOToeBrU0BljYFmEoVgHGUKgAPnREAt84IgLuqFgAYSUEOAHszDwuAtSkHAZhLGYIpdCLgKGUIHtocZG1zkLmUIRhxDnJU1RDA1uYga5uDzKUOwhTnIEfnxcDe5iBrcyQAYGlzkKkUYhhxDrKXQgxbSwLWUohhbknA1JKAEZOAvSUBW0sC1pYEzC0JmFoSMMJyCDhaFrK3JGDtyiFgaVnI3LKQqWUhI2YhR8tC9paFrC0LWVoWMrcsZGpZyIhZyNGykL2rSIGtlQHWVgZYWhlgbmWAqZUBRiwDHK0MsLcywNbKAGsOoNUhllaHmFsdYmp1iBHrEEerQ+w5gFYI2VodYm11iKXVIeYcQCuETK0QMmIh5MgBtELI3gohWyuErDmAVolZWiFkzgG0SszUKjGjfj6gVmKOVonZcwCtFbB9HQC+ozWDbz1bvGu9iKW1AuYcQOtFTLEX1GbIaFegN0OOHEBrhuw5gNYM2XIArRuz5gDacoB3bTnAEktxXQ4wfw0AvveM8b4tiJjSJOwLIsbXsAKeNeKCiOO3D+AVbUl0AfjGs8ZPbUnIdgFoa1LWC0BblfMuB9AeC1j6gqQE0J9LmC8AOYD2ZMb7i4bt2ZTpWoHfPoB7Tj2fXzT8N1X41vkq/QHOAAAAAElFTkSuQmCC',
-    photo: users?.photo,
-    name: users?.fullName,
-    gender: users?.gender,
-    dateOfBirth: convertApiDateToDisplay(users?.DOB),
-    // mobileNumber: users?.contactNumber1,
-    email: users?.emailID,
-  });
-  // // console.log('forsetFormDatamData:', formData);
-
-  //   const [photo, setPhoto] = useState(null);
-
-  // const uploadImage = () => {
-  //   const options = {
-  //     mediaType: 'photo',
-  //     quality: 1,
-  //     includeBase64: true,
-  //   };
-
-  //   launchImageLibrary(options, (response) => {
-  //     if (response.assets && response.assets.length > 0) {
-  //       const base64Image = response.assets[0].base64;
-  //       setPhoto(base64Image);
-  //     }
-  //   });
-  // };
-
-  const [searchText, setSearchText] = useState('');
-  const [filteredSkills, setFilteredSkills] = useState([]);
-  const [skillOptions, setSkillOptions] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [selectedSkills, setSelectedSkills] = useState([]);
-  const [jobCategories, setJobCategories] = useState([]);
-  const [skill, setSkill] = useState('');
-
+  useEffect(() => {
+    fetchProfile();
+    GetDataFunc();
+  }, []);
+  // Fetch skill options
   useFocusEffect(
     useCallback(() => {
-      const GetDataFunc = async () => {
+      const fetchSkills = async () => {
         try {
           const res = await fetch(`https://jobipo.com/api/v2/job-data`, {
             method: 'GET',
           });
           const langData = await res.json();
-          // console.log('langDatalangData-=>>>', langData);
           const list = JSON.parse(langData?.msg)?.skill?.map(
             item => item.skill,
           );
-
           setSkillOptions(list || []);
         } catch (error) {
-          // console.error('Skill API error:', error);
+          // Silently handle error
         }
       };
-
-      GetDataFunc();
+      fetchProfile();
+      fetchSkills();
     }, []),
   );
-
   useEffect(() => {
     if (searchText.length >= 2) {
       const filtered = skillOptions.filter(skill =>
@@ -279,7 +218,6 @@ const JobProfile = () => {
       setSelectedSkills(updated);
     }
   };
-
   const handleRemoveSkill = skillToRemove => {
     const updatedSkills = selectedSkills.filter(
       skill => skill !== skillToRemove,
@@ -287,117 +225,165 @@ const JobProfile = () => {
     setSelectedSkills(updatedSkills);
   };
 
-  const handleChange = (key, value) => {
-    setFormData({...formData, [key]: value});
-  };
+  const GetDataFunc = async () => {
+    try {
+      const storedUserId = await AsyncStorage.getItem('UserID');
 
+      if (!storedUserId) {
+        showToastMessage('UserID not found. Please login again.', 'danger');
+        signOut();
+        return;
+      }
+
+      const formdata = new FormData();
+      formdata.append('user_id', storedUserId);
+      formdata.append('action', 'dashboard');
+
+      const response = await fetch('https://jobipo.com/api/v2/dashboard', {
+        method: 'POST',
+        body: formdata,
+      });
+
+      const sliderDataApi = await response.json();
+
+      if (sliderDataApi.logout !== 1) {
+        const parsedMsg = JSON.parse(sliderDataApi?.msg);
+        const userData = parsedMsg?.users;
+        const jobSeekerData = parsedMsg?.jobseeker;
+        setUsers(userData);
+
+        const certificationName = await AsyncStorage.getItem('certification');
+        const cv = await AsyncStorage.getItem('cv');
+        setCertification(certificationName);
+        // setCV(cv);
+
+        if (jobSeekerData) {
+          setJobSeekerData({
+            ...jobSeekerData,
+            photo: userData?.photo,
+            userID: userData?.userID,
+            fullName: userData?.fullName,
+            gender: userData?.gender,
+            DOB: userData?.DOB,
+            contactNumber1: userData?.contactNumber1,
+            emailID: userData?.emailID,
+          });
+        } else {
+          setJobSeekerData({
+            fullName: userData?.fullName,
+            gender: userData?.gender,
+            DOB: userData?.DOB,
+            photo: userData?.photo,
+            contactNumber1: userData?.contactNumber1,
+            emailID: userData?.emailID,
+
+            jobseekerId: '',
+            userID: userData?.userID,
+            languageKnown: JSON.stringify([]),
+            preferredLocation: '',
+            currentLocation: '',
+            homeTown: '',
+            education: JSON.stringify([]),
+            educationLevel: '',
+            certification: '',
+            skills: JSON.stringify([]),
+            jobPreference: '',
+            preferredJobCategory: '',
+            preferredJobType: '',
+            preferredEmployementType: '',
+            experience: JSON.stringify([]),
+            totalExperience: '',
+            cv: '',
+          });
+        }
+
+        setisLoading(false);
+      } else {
+        signOut();
+      }
+    } catch (error) {
+      showToastMessage('Something went wrong.', 'danger');
+    }
+  };
+  const fetchProfile = async () => {
+    try {
+      const userID = await AsyncStorage.getItem('UserID');
+
+      if (!userID) {
+        showToastMessage('User ID not found. Please log in again.', 'danger');
+        return;
+      }
+      const response = await fetch(
+        `https://jobipo.com/api/v3/view-profile?UserID=${userID}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          },
+        },
+      );
+
+      const data = await response.json();
+      console.log('data=--==-=--=-=1', data);
+      const profileData = data.data;
+
+      setEmploymentType(profileData.preferredEmployementType || '');
+      setWorkMode(profileData.workMode || '');
+      setExperienceLevel(
+        profileData.totalExperience
+          ? `${profileData.totalExperience} years`
+          : '',
+      );
+      setPreferredJobTitle(profileData.preferredJobTitle || '');
+      setPreferredJobIndustry(profileData.preferredJobIndustry || '');
+      setCurrentSalary(profileData.current_salary || '');
+      setPreferredLocations(profileData?.preferredLocation || '');
+      setEnglishSpeaking(profileData.englishSpeaking || '');
+      setPhoto(profileData.photo || null);
+      setCV(profileData.cv || null);
+      setPdfLoadError(false); // Reset error state when new CV is loaded
+
+      try {
+        const decoded = JSON.parse(JSON.parse(profileData.languageKnown));
+        setLanguageKnown(Array.isArray(decoded) ? decoded : []);
+      } catch {
+        setLanguageKnown([]);
+      }
+    } catch (error) {
+      showToastMessage('Failed to fetch profile. Please try again.', 'danger');
+    }
+  };
+  // Remove unused keyboard listeners - no functionality implemented
   useFocusEffect(
     useCallback(() => {
-      const GetDataFunc = async () => {
+      const fetchJobTitles = async () => {
         try {
-          const storedUserId = await AsyncStorage.getItem('UserID');
+          const response = await fetch(
+            'https://jobipo.com/api/v3/fetch-job-titles',
+            {
+              method: 'GET',
+              headers: {
+                Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+              },
+            },
+          );
 
-          if (!storedUserId) {
-            showToastMessage('UserID not found. Please login again.', 'danger');
-            signOut();
-            return;
-          }
+          const result = await response.json();
 
-          const formdata = new FormData();
-          formdata.append('user_id', storedUserId);
-          formdata.append('action', 'dashboard');
-
-          const response = await fetch('https://jobipo.com/api/v2/dashboard', {
-            method: 'POST',
-            body: formdata,
-          });
-
-          const sliderDataApi = await response.json();
-
-          if (sliderDataApi.logout !== 1) {
-            const parsedMsg = JSON.parse(sliderDataApi?.msg);
-            const userData = parsedMsg?.users;
-            const jobSeekerData = parsedMsg?.jobseeker;
-            // // console.log('Parsed User Data:', userData);
-            // // console.log('Parsed Job Seeker Data:', jobSeekerData);
-            console.log('userData------1-----', userData);
-            setUsers(userData);
-
-            const certificationName =
-              await AsyncStorage.getItem('certification');
-            const cv = await AsyncStorage.getItem('cv');
-            setCertification(certificationName);
-            setCV(cv);
-
-            if (jobSeekerData) {
-              setJobSeekerData({
-                ...jobSeekerData,
-                // Pic: userData?.Pic,
-                photo: userData?.photo,
-                userID: userData?.userID,
-                fullName: userData?.fullName,
-                gender: userData?.gender,
-                DOB: userData?.DOB,
-                contactNumber1: userData?.contactNumber1,
-                emailID: userData?.emailID,
-              });
-            } else {
-              setJobSeekerData({
-                fullName: userData?.fullName,
-                gender: userData?.gender,
-                DOB: userData?.DOB,
-                photo: userData?.photo,
-                contactNumber1: userData?.contactNumber1,
-                emailID: userData?.emailID,
-
-                jobseekerId: '',
-                userID: userData?.userID,
-                languageKnown: JSON.stringify([]),
-                preferredLocation: '',
-                currentLocation: '',
-                homeTown: '',
-                education: JSON.stringify([]),
-                educationLevel: '',
-                certification: '',
-                skills: JSON.stringify([]),
-                jobPreference: '',
-                preferredJobCategory: '',
-                preferredJobType: '',
-                preferredEmployementType: '',
-                experience: JSON.stringify([]),
-                totalExperience: '',
-                cv: '',
-              });
-            }
-
-            setisLoading(false);
-          } else {
-            signOut();
+          if (result?.status === 1 && result?.msg) {
+            const parsed = JSON.parse(result.msg);
+            setJobTitles(parsed);
           }
         } catch (error) {
-          showToastMessage('Something went wrong.', 'danger');
+          // Silently handle error
         }
       };
 
-      let mount = true;
-      if (mount) {
-        GetDataFunc();
-      }
-
-      return () => {
-        mount = false;
-      };
+      fetchJobTitles();
+      fetchJobCategories();
     }, []),
   );
-
-  const [languages, setLanguages] = useState([]);
-  const [languageKnown, setLanguageKnown] = useState([]);
-  function onBeginDateSelected(value) {
-    setBeginDatePicker(false);
-    setDate(value);
-    // methodSetupRequest('dob', moment(value).format('DD-MM-YYYY'));
-  }
-
   useFocusEffect(
     useCallback(() => {
       const GetDataFunc = async () => {
@@ -406,12 +392,12 @@ const JobProfile = () => {
             method: 'GET',
           }).then(res => res.json());
 
-          const list = JSON.parse(
-            JSON.parse(JSON.stringify(langData)).msg,
-          )?.language?.map(item => item.language);
+          const list = JSON.parse(langData?.msg)?.language?.map(
+            item => item.language,
+          );
           setLanguages(list || []);
         } catch (error) {
-          // console.error('Error fetching language data:', error);
+          // Silently handle error
         }
       };
 
@@ -434,14 +420,6 @@ const JobProfile = () => {
   const handleRemove = lang => {
     setLanguageKnown(prev => prev.filter(item => item !== lang));
   };
-
-  const navigation = useNavigation();
-
-  function convertToYearsAndMonths(totalMonths) {
-    const years = Math.floor(totalMonths / 12);
-    const months = totalMonths % 12;
-    return {years, months};
-  }
 
   function parseIfArrayString(value) {
     if (value === '') {
@@ -507,80 +485,6 @@ const JobProfile = () => {
     return displayDate;
   }
 
-  const isValidDate = dateStr => {
-    const dateRegex = /^(0[1-9]|[12]\d|3[01])-(0[1-9]|1[0-2])-\d{4}$/;
-    if (!dateRegex.test(dateStr)) return false;
-
-    const [day, month, year] = dateStr.split('-').map(Number);
-    const date = new Date(year, month - 1, day);
-    const today = new Date();
-
-    return (
-      date.getFullYear() === year &&
-      date.getMonth() === month - 1 &&
-      date.getDate() === day &&
-      date <= today
-    );
-  };
-
-  const [employmentType, setEmploymentType] = useState('');
-  const [workMode, setWorkMode] = useState('');
-  const [experienceLevel, setExperienceLevel] = useState('');
-  const [preferredJobTitle, setPreferredJobTitle] = useState('');
-  const [preferredJobIndustry, setPreferredJobIndustry] = useState('');
-  const [currentSalary, setCurrentSalary] = useState('');
-
-  // const handleSubmit = async () => {
-  //   try {
-  //     const userID = await AsyncStorage.getItem('UserID');
-
-  //     if (!userID) {
-  //       Alert.alert('Error', 'User ID not found. Please log in again.');
-  //       return;
-  //     }
-
-  //     const payload = {
-  //       userID,
-  //       preferredEmployementType: employmentType,
-  //       workMode: workMode,
-  //       experienceLevel: experienceLevel,
-  //       preferred_job_Title: preferredJobTitle,
-  //       preferredJobIndustry,
-  //       current_salary: currentSalary,
-  //       skills: selectedSkills,
-  //       preferredLocation: preferredLocations,
-  //       pllat,
-  //       pllng,
-  //       englishSpeaking,
-  //       languageKnown: JSON.stringify(languageKnown),
-  //       DOB: formData.dateOfBirth,
-  //       gender: formData.gender,
-  //       photo: photo,
-
-  //     };
-
-  //     // console.log('Response payload:', payload);
-  //     const res = await fetch('https://jobipo.com/api/v3/candidate-profile-update', {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //         Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
-  //       },
-  //       body: JSON.stringify(payload),
-  //     });
-
-  //     const data = await res.json();
-  //     // console.log('Response new update profile:', data);
-  //      if (data.status === 1) {
-  //     } else {
-  //       Alert.alert('Update Failed', data.message || 'Something went wrong.');
-  //     }
-  //   } catch (err) {
-  //     console.error('Submit error:', err);
-  //     Alert.alert('Error', 'Something went wrong. Please try again.');
-  //   }
-  // };
-
   const handleSubmit = async () => {
     try {
       const userID = await AsyncStorage.getItem('UserID');
@@ -645,103 +549,6 @@ const JobProfile = () => {
     }
   };
 
-  const [profileData, setProfileData] = useState(null);
-
-  useFocusEffect(
-    useCallback(() => {
-      const fetchProfile = async () => {
-        try {
-          const userID = await AsyncStorage.getItem('UserID');
-
-          if (!userID) {
-            showToastMessage(
-              'User ID not found. Please log in again.',
-              'danger',
-            );
-            return;
-          }
-          const response = await fetch(
-            `https://jobipo.com/api/v3/view-profile?UserID=${userID}`,
-            {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
-              },
-            },
-          );
-
-          const data = await response.json();
-          console.log('data------1-----', data);
-          // setProfileData(data);
-          // // console.log('preferredEmployementType:', data.preferredEmployementType);
-          setEmploymentType(data.data.preferredEmployementType || '');
-          setWorkMode(data.data.workMode || '');
-          setExperienceLevel(`${data.data.totalExperience + ' years'}` || '');
-          setPreferredJobTitle(data.data.preferredJobTitle || '');
-          setPreferredJobIndustry(data.data.preferredJobIndustry || '');
-          setCurrentSalary(data.data.current_salary || '');
-          setPreferredLocations(data.data.preferredLocation || '');
-          setEnglishSpeaking(data.data.englishSpeaking || '');
-          setPhoto(data.data.photo || null);
-
-          try {
-            const decoded = JSON.parse(JSON.parse(data.data.languageKnown));
-            setLanguageKnown(Array.isArray(decoded) ? decoded : []);
-          } catch (error) {
-            // console.error('Error parsing languageKnown:', error);
-            setLanguageKnown([]);
-          }
-        } catch (error) {
-          // console.error('❌ Error fetching profile:', error);
-          showToastMessage(
-            'Failed to fetch profile. Please try again.',
-            'danger',
-          );
-        }
-      };
-
-      fetchProfile();
-    }, []),
-  );
-
-  //  const [preferredJobTitle, setPreferredJobTitle] = useState('');
-  const [jobTitles, setJobTitles] = useState([]);
-  const [filteredTitles, setFilteredTitles] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-
-  useFocusEffect(
-    useCallback(() => {
-      const fetchJobTitles = async () => {
-        try {
-          const response = await fetch(
-            'https://jobipo.com/api/v3/fetch-job-titles',
-            {
-              method: 'GET',
-              headers: {
-                Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
-              },
-            },
-          );
-
-          const result = await response.json();
-          // // console.log('result:', result);
-
-          if (result?.status === 1 && result?.msg) {
-            const parsed = JSON.parse(result.msg);
-            // // console.log('job titles', parsed);
-            setJobTitles(parsed); // full objects with jobTitle, jobTitleId etc.
-          }
-        } catch (error) {
-          // console.error('Error fetching job titles:', error);
-        }
-      };
-
-      fetchJobTitles();
-      fetchJobCategories();
-    }, []),
-  );
-
   const handleJobChange = text => {
     setPreferredJobTitle(text);
 
@@ -755,9 +562,6 @@ const JobProfile = () => {
       setShowSuggestions(false);
     }
   };
-  const API_BASE_URL = 'https://jobipo.com/api/v3';
-  const AUTH_TOKEN = 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6';
-  const JOBS_PER_PAGE = 5;
 
   const makeApiRequest = async (endpoint, options = {}) => {
     try {
@@ -796,60 +600,70 @@ const JobProfile = () => {
       // console.error('Error fetching job titles:', error);
     }
   }, []);
-  // const uploadImage = () => {
-  //   const options = {
-  //     mediaType: 'photo',
-  //     quality: 1,
-  //     includeBase64: true,
-  //   };
 
-  //   launchImageLibrary(options, (response) => {
-  //     if (response.assets && response.assets.length > 0) {
-  //       const base64Image = response.assets[0].base64;
-  //       setPhoto(base64Image);
-  //     }
-  //   });
-  // };
-
-  const [imageData, setImageData] = useState(null);
-  const [photo, setPhoto] = useState(null); // ✅ this is required
-
-  // const pickImage = () => {
-  //   launchImageLibrary({ mediaType: 'photo', quality: 1 }, response => {
-  //     if (response.didCancel || response.errorCode) return;
-
-  //     const asset = response.assets[0];
-  //     setPhoto({
-  //       uri: asset.uri,
-  //       type: asset.type,
-  //       fileName: asset.fileName,
-  //     });
-  //   });
-  // };
-
-  // // console.log('users.photo:', users?.photo);
-  // Keyboard event listeners for better Android support
-  useEffect(() => {
-    if (Platform.OS === 'android') {
-      const keyboardDidShowListener = Keyboard.addListener(
-        'keyboardDidShow',
-        () => {
-          // Optional: Add any specific behavior when keyboard shows
-        },
-      );
-      const keyboardDidHideListener = Keyboard.addListener(
-        'keyboardDidHide',
-        () => {
-          // Optional: Add any specific behavior when keyboard hides
-        },
-      );
-
-      return () => {
-        keyboardDidShowListener?.remove();
-        keyboardDidHideListener?.remove();
-      };
-    }
+  // Handle location selection - can be called from location picker screen/modal
+  const handleLocationSelect = useCallback(location => {
+    console.log('handleLocationSelect called with:', location);
+    setLocationSelected(true);
   }, []);
+
+  // Handle location selection callback from LocationPicker screen
+  const handleLocationPickerResult = useCallback(
+    (current_location, lat, lng, city, state, pincode, area, selectedState) => {
+      setPreferredLocations(current_location);
+      setPllat(lat);
+      setPllng(lng);
+      setLocationSelected(true); // Mark location as selected
+      setSelectedState(state || selectedState);
+      setSelectedCity(city);
+      setSelectedPincode(pincode);
+
+      setFormData(prev => ({
+        ...prev,
+        address: area,
+        state: state || selectedState,
+        city: city,
+        pincode: pincode,
+      }));
+
+      console.log('=== handleLocationPickerResult called ===');
+      console.log('current_location:', current_location);
+      console.log('lat:', lat);
+      console.log('lng:', lng);
+      console.log('city:', city);
+      console.log('state:', state);
+      console.log('selectedState:', selectedState);
+      console.log('pincode:', pincode);
+      console.log('area:', area);
+
+      // // Update currentLocation first
+      // if (area) {
+      //   handleLocationSelect(current_location);
+      // }
+
+      // Set location details
+      if (lat) {
+        setLat(String(lat));
+      }
+      if (lng) {
+        setLng(String(lng));
+      }
+      if (city) {
+        setLocationCity(city);
+      }
+      if (state) {
+        setLocationState(state);
+      }
+      if (pincode) {
+        setPincode(pincode);
+      }
+      if (area) {
+        setArea(area);
+      }
+    },
+    [handleLocationSelect],
+  );
+
   const pickImage = async () => {
     try {
       const image = await ImagePicker.openPicker({
@@ -884,7 +698,195 @@ const JobProfile = () => {
       // // console.log('Image pick cancelled or failed:', error);
     }
   };
-  console.log('photo?.uri', photo);
+  const handleUpload = async (uri, type, name) => {
+    try {
+      const userID = await AsyncStorage.getItem('UserID');
+      if (!userID) {
+        showToastMessage('User ID not found. Please login again.', 'danger');
+        return;
+      }
+
+      if (!uri || !type || !name) {
+        showToastMessage('Please select a file first', 'danger');
+        return;
+      }
+
+      const resumeFormData = new FormData();
+      resumeFormData.append('image', {
+        uri: uri,
+        type: type,
+        name: name,
+      });
+      resumeFormData.append('userID', userID);
+
+      const updateRes = await fetch(`https://jobipo.com/api/v2/resume-upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        body: resumeFormData,
+      });
+
+      const updateJson = await updateRes.json();
+      console.log('updateJson-==-=-=d--==-', updateJson);
+      if (updateJson && updateJson.status === 1) {
+        // await AsyncStorage.setItem('cv', fileName);
+        showToastMessage('Resume uploaded successfully!', 'success');
+        // Refresh CV state after successful upload
+        // Construct proper URL - check if it's already a full URL or just a filename
+        let cvUrl = '';
+        if (updateJson.data?.cv) {
+          const cvPath = updateJson.data.cv;
+          if (cvPath.startsWith('http://') || cvPath.startsWith('https://')) {
+            cvUrl = cvPath;
+          } else {
+            // Remove leading slash if present and construct full URL
+            const cleanPath = cvPath.startsWith('/')
+              ? cvPath.substring(1)
+              : cvPath;
+            cvUrl = `https://jobipo.com/jobipo.com/public/uploads/users/${cleanPath}`;
+          }
+        } else if (updateJson.cv) {
+          cvUrl = updateJson.cv;
+        }
+        setCV(cvUrl);
+        setPdfLoadError(false); // Reset error state for new CV
+      } else {
+      }
+    } catch (err) {}
+  };
+  const openGalleryView = async () => {
+    try {
+      const res = await pick({
+        mode: 'open',
+        type: [types.pdf, types.allFiles],
+        allowMultiSelection: false,
+      });
+
+      if (res && res[0]) {
+        const file = res[0];
+        const fileSizeInMB = file.size ? file.size / (1024 * 1024) : 0;
+
+        // Validate file size (5MB max)
+        // if (fileSizeInMB > 5) {
+        //   showToastMessage('File size exceeds 5MB limit', 'danger');
+        //   return;
+        // }
+
+        // Validate file type
+        const fileName = file.name || '';
+        const fileExtension = fileName.split('.').pop()?.toLowerCase();
+        const allowedExtensions = ['pdf', 'doc', 'docx'];
+
+        if (!allowedExtensions.includes(fileExtension)) {
+          showToastMessage(
+            'Please select PDF, Doc or Docx files only',
+            'danger',
+          );
+          return;
+        }
+
+        // Store file information in state
+        const fileUri = file.uri || file.path || file.fileCopyUri;
+        const fileType = file.type || file.mime || 'application/pdf';
+
+        setFileUri(fileUri);
+        setFileType(fileType);
+        setFileName(fileName);
+
+        // Automatically upload after selection
+        await handleUpload(fileUri, fileType, fileName);
+      }
+    } catch (err) {
+      if (err?.message !== 'User canceled document picker') {
+        showToastMessage('Error selecting file', 'danger');
+      }
+    }
+  };
+
+  const checkMediaPermissions = async (type = 'gallery', cb) => {
+    try {
+      // Determine the appropriate permission based on platform and Android version
+      let permission;
+      if (Platform.OS === 'ios') {
+        permission = PERMISSIONS.IOS.PHOTO_LIBRARY;
+      } else {
+        // For Android 13+ (API 33+), use READ_MEDIA_IMAGES
+        // For Android 10-12 (API 29-32), use READ_EXTERNAL_STORAGE
+        // For older versions, use READ_EXTERNAL_STORAGE
+        if (Platform.Version >= 33) {
+          permission = PERMISSIONS.ANDROID.READ_MEDIA_IMAGES;
+        } else {
+          permission = PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE;
+        }
+      }
+
+      // Check current permission status
+      const result = await check(permission);
+      console.log('Permission check result:', result);
+
+      if (result === RESULTS.GRANTED) {
+        // Permission already granted
+        if (cb) cb(true);
+        return;
+      }
+
+      if (result === RESULTS.BLOCKED || result === RESULTS.UNAVAILABLE) {
+        // Permission is blocked or unavailable, show settings dialog
+        permissionConfirm(
+          `Jobipo requires access to your storage so you can select and upload documents. Your documents will only be stored securely on Jobipo servers and used within the app.`,
+          status => {
+            if (status) {
+              openSettings().catch(() => {});
+            }
+            if (cb) cb(false);
+          },
+        );
+        return;
+      }
+
+      // Request permission
+      const requestResult = await request(permission);
+      console.log('Permission request result:', requestResult);
+
+      if (requestResult === RESULTS.GRANTED) {
+        // Permission granted
+        if (cb) cb(true);
+      } else {
+        // Permission denied
+        permissionConfirm(
+          `Jobipo requires access to your storage so you can select and upload documents. Your documents will only be stored securely on Jobipo servers and used within the app.`,
+          status => {
+            if (status) {
+              openSettings().catch(() => {});
+            }
+            if (cb) cb(false);
+          },
+        );
+        if (cb) cb(false);
+      }
+    } catch (error) {
+      console.error('Permission error:', error);
+      showToastMessage('Error checking permissions', 'danger');
+      if (cb) cb(false);
+    }
+  };
+  const methodForPermission = type => {
+    try {
+      checkMediaPermissions(type, status => {
+        if (status) {
+          openGalleryView();
+          return;
+        }
+      });
+    } catch (err) {
+      console.error('Permission method error:', err);
+    }
+  };
+  const handleSelectResume = async () => {
+    methodForPermission('gallery');
+  };
+  console.log('CV-=-=-=-=-', cv);
   return (
     <>
       {/* <JobHeader /> */}
@@ -928,7 +930,7 @@ const JobProfile = () => {
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>Email ID</Text>
               <TextInput
-                style={[styles.input, {color: textColor}]}
+                style={styles.input}
                 placeholder="Enter your email"
                 value={formData.email}
                 onChangeText={value =>
@@ -947,7 +949,7 @@ const JobProfile = () => {
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>Date of Birth</Text>
               <TextInput
-                style={[styles.input, {color: textColor}]}
+                style={styles.input}
                 placeholder="DD/MM/YYYY"
                 value={formData?.dateOfBirth ? formData?.dateOfBirth : ''}
                 onChangeText={value => {
@@ -1045,7 +1047,7 @@ const JobProfile = () => {
 
               <TextInput
                 placeholder="Add only 1 skill at a time"
-                placeholderTextColor={isDarkMode ? '#D0D0D0' : '#D0D0D0'}
+                placeholderTextColor="#D0D0D0"
                 style={styles.input}
                 value={searchText}
                 onChangeText={setSearchText}
@@ -1115,7 +1117,7 @@ const JobProfile = () => {
               <TextInput
                 style={styles.input}
                 placeholder="Enter Job Title"
-                placeholderTextColor={isDarkMode ? '#D0D0D0' : '#D0D0D0'}
+                placeholderTextColor="#D0D0D0"
                 value={preferredJobTitle}
                 onChangeText={handleJobChange}
                 onFocus={() => {
@@ -1153,7 +1155,7 @@ const JobProfile = () => {
             <TextInput
               style={styles.input}
               placeholder="Enter Job Role"
-              placeholderTextColor={isDarkMode ? '#555' : '#555'}
+              placeholderTextColor="#555"
               value={formData.jobRole}
               onChangeText={(text) => handleChange('jobRole', text)}
             /> */}
@@ -1267,7 +1269,7 @@ const JobProfile = () => {
                 style={styles.input}
                 placeholder="Enter current salary"
                 keyboardType="numeric"
-                placeholderTextColor={isDarkMode ? '#D0D0D0' : '#D0D0D0'}
+                placeholderTextColor="#D0D0D0"
                 value={currentSalary}
                 onChangeText={value => setCurrentSalary(value)}
                 onFocus={() => {
@@ -1285,7 +1287,7 @@ const JobProfile = () => {
                 }}>
                 <Text style={styles.label}>Preferred Location</Text>
               </View>
-              <PlacesAutocomplete
+              {/* <PlacesAutocomplete
                 apiKey={'AIzaSyDqBEtr9Djdq0b9NTCMmquSrKiPCCv384o'}
                 value={preferredLocations}
                 onPlaceSelected={(address, placeId, val) => {
@@ -1323,8 +1325,43 @@ const JobProfile = () => {
                   }
                 }}
                 onBlur={() => setFocusedInput(null)}
-              />
-
+              /> */}
+              {/* Current Location Field */}
+              <View style={{}}>
+                <Pressable
+                  style={styles.locationInput}
+                  onPress={() => {
+                    navigation.navigate('LocationPicker', {
+                      fromEdit: true,
+                      current_location: preferredLocations || '',
+                      onLocationSelect: handleLocationPickerResult,
+                    });
+                  }}>
+                  <View style={styles.locationTextContainer}>
+                    <Text
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      style={[
+                        styles.locationInputText,
+                        !preferredLocations && styles.locationPlaceholder,
+                      ]}>
+                      {preferredLocations || 'Current Location'}
+                    </Text>
+                    {/* {(locationCity || locationState || area) && (
+                          <Text style={styles.locationSubText}>
+                            {[locationCity, area, locationState]
+                              .filter(Boolean)
+                              .join(', ')}
+                          </Text>
+                        )} */}
+                  </View>
+                </Pressable>
+                {/* {accountReq.validators.current_location.error ? (
+                      <Text style={styles.errorText}>
+                        {accountReq.validators.current_location.error}
+                      </Text>
+                    ) : null} */}
+              </View>
               {/* {selectedCity ? (
                 <View>
                   <Text style={styles.label}>City</Text>
@@ -1523,19 +1560,24 @@ const JobProfile = () => {
                           <EnvelopeIcon />
                         </View>
                         <View style={{marginBottom: 6}}>
-                          <VerticalDashedLine height={40} />
+                          <VerticalDashedLine height={30} />
                         </View>
                         <SmallGrayCircle />
                       </View>
                       <View style={styles.jobDetails}>
                         <Text style={styles.jobTitle}>
-                          {item?.degree ? item.degree : 'Degree Not Mentioned'}
+                          {item?.degree
+                            ? item.degree
+                            : jobSeekerData?.educationLevel
+                              ? jobSeekerData?.educationLevel
+                              : 'Degree Not Mentioned'}
                         </Text>
                         <Text style={styles.companyName}>
                           {item?.collegeName
                             ? item.collegeName
                             : 'College Name  Not Mentioned'}
                         </Text>
+
                         <View style={styles.section}>
                           <Text style={styles.sectionValue}>
                             Session - {item?.yearOfCompletion}
@@ -1663,34 +1705,75 @@ const JobProfile = () => {
           </View>
 
           <View style={styles.resumecontainer}>
-            {/* Icon + Dashed Line */}
-            <View style={styles.iconWrapper}>
-              <View style={styles.circle}>
-                <UploadArrowIcon size={24} />
-              </View>
-              {/* <Svg height="30" width="2">
-          <Path
-            d="M1 0 V30"
-            stroke="#D0D0D0"
-             strokeWidth="1"
-            strokeDasharray="2,2"
-          />
-        </Svg> */}
-            </View>
-            {/* Info Text */}
-            <Text style={styles.infoText}>
-              Upload PDF, Doc or Docx files only
-            </Text>
-            <Text style={styles.infoText}>Maximum file size 5MB</Text>
+            {cv ? (
+              <>
+                {/* PDF Preview - Half Visible */}
+                <View style={styles.pdfPreviewContainer}>
+                  {!pdfLoadError && cv ? (
+                    <Pdf
+                      source={{uri: cv, cache: true}}
+                      style={styles.pdfPreview}
+                      trustAllCerts={false}
+                      enablePaging={false}
+                      horizontal={false}
+                      page={1}
+                      fitPolicy={0}
+                      spacing={0}
+                      onLoadComplete={(numberOfPages, filePath) => {
+                        console.log(`Number of pages: ${numberOfPages}`);
+                        setPdfLoadError(false);
+                      }}
+                      onError={error => {
+                        console.log('PDF Error:', error);
+                        // Set error state to show fallback UI when PDF fails to load
+                        // This handles trust manager errors and other PDF loading issues
+                        setPdfLoadError(true);
+                      }}
+                    />
+                  ) : (
+                    <View style={styles.pdfErrorContainer}>
+                      <Icon name="picture-as-pdf" size={48} color="#FF8D53" />
+                      <Text style={styles.pdfErrorText}>Resume Uploaded</Text>
+                      <Text style={styles.pdfErrorSubText}>Tap to update</Text>
+                    </View>
+                  )}
+                </View>
+                {/* Update Resume Button */}
+                <TouchableOpacity
+                  style={styles.updateResumeButton}
+                  onPress={handleSelectResume}
+                  // onPress={() =>
+                  //   navigation.navigate('ResumeUpload', jobSeekerData)
+                  // }
+                >
+                  <Icon name="edit" size={18} color="#fff" />
+                  <Text style={styles.updateResumeText}>Update Resume</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {/* Icon + Dashed Line */}
+                <View style={styles.iconWrapper}>
+                  <View style={styles.circle}>
+                    <UploadArrowIcon size={24} />
+                  </View>
+                </View>
+                {/* Info Text */}
+                <Text style={styles.infoText}>
+                  Upload PDF, Doc or Docx files only
+                </Text>
+                <Text style={styles.infoText}>Maximum file size 5MB</Text>
 
-            {/* Upload Button */}
-            <TouchableOpacity
-              style={styles.uploadBox}
-              onPress={() =>
-                navigation.navigate('ResumeUpload', jobSeekerData)
-              }>
-              <Text style={styles.uploadText}>+ Add your resume</Text>
-            </TouchableOpacity>
+                {/* Upload Button */}
+                <TouchableOpacity
+                  style={styles.uploadBox}
+                  onPress={() =>
+                    navigation.navigate('ResumeUpload', jobSeekerData)
+                  }>
+                  <Text style={styles.uploadText}>+ Add your resume</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
           {/* <View style={styles.sectionContainer}>
@@ -1893,10 +1976,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
-  companyName: {
-    fontSize: 14,
-    color: '#555',
-  },
+
   industry: {
     fontSize: 13,
     color: '#777',
@@ -1984,7 +2064,7 @@ const styles = StyleSheet.create({
   },
 
   jobTitle: {fontSize: 16, fontWeight: 'bold', color: '#222'},
-  companyName: {fontSize: 14, color: '#555'},
+  companyName: {fontSize: 14, color: '#555', paddingVertical: 10},
   jobDetails: {
     flex: 1,
     paddingLeft: 10,
@@ -2376,6 +2456,59 @@ const styles = StyleSheet.create({
     color: '#444',
     fontWeight: '500',
   },
+  pdfPreviewContainer: {
+    width: '100%',
+    height: 100,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  pdfPreview: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  updateResumeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF8D53',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    width: '100%',
+    gap: 8,
+  },
+  updateResumeText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
+    fontFamily: fonts.Montserrat_SemiBold,
+  },
+  pdfErrorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    paddingVertical: 20,
+    height: 100,
+  },
+  pdfErrorText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '600',
+    marginTop: 12,
+    fontFamily: fonts.Montserrat_SemiBold,
+  },
+  pdfErrorSubText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    fontFamily: fonts.Montserrat_Regular,
+  },
   uploadDetailsBox: {
     marginTop: 12,
     backgroundColor: '#FF8D53',
@@ -2423,6 +2556,40 @@ const styles = StyleSheet.create({
   },
   tagText: {color: 'white', fontSize: 14, marginRight: 6},
   removeIcon: {color: 'white', fontWeight: 'bold', fontSize: 14},
+  locationInput: {
+    borderRadius: 10,
+    alignSelf: 'center',
+    alignItems: 'center',
+    marginHorizontal: 1,
+    height: 45,
+    backgroundColor: 'white',
+    flexDirection: 'row',
+    paddingHorizontal: 10,
+    marginVertical: 5,
+    // borderColor: '#C7CACB',
+    // borderWidth: 1,
+    justifyContent: 'flex-start',
+  },
+  locationTextContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  locationInputText: {
+    fontSize: 16,
+    color: '#000',
+    paddingHorizontal: 11,
+    fontFamily: fonts.Montserrat_Regular,
+  },
+  locationPlaceholder: {
+    color: '#BABFC7',
+  },
+  locationSubText: {
+    fontSize: 12,
+    color: '#666',
+    paddingHorizontal: 11,
+    marginTop: 2,
+    fontFamily: fonts.Montserrat_Regular,
+  },
 });
 
 export default JobProfile;

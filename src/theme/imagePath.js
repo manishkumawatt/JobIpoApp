@@ -25,6 +25,7 @@ const imagePath = {
   product_2: require('../assests/product_2.png'),
   money_saving: require('../assests/money-saving.png'),
   download: require('../assests/download.png'),
+  user: require('../assests/user.png'),
 };
 
 export default imagePath;
