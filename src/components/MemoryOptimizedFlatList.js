@@ -18,15 +18,13 @@ const MemoryOptimizedFlatList = ({
   hasMore = false,
   maxItems = 1000, // Increased limit for pagination support
   itemHeight = 200, // Approximate item height for getItemLayout
+  HeaderComponent,
   ...props
 }) => {
   // Memoize processed data to prevent unnecessary re-renders
   const processedData = useMemo(() => {
     // Only truncate if we have a very large dataset (for memory management)
     if (Array.isArray(data) && data.length > maxItems) {
-      console.warn(
-        `Data truncated from ${data.length} to ${maxItems} items for memory optimization`,
-      );
       return data.slice(0, maxItems);
     }
     return data;
@@ -115,21 +113,24 @@ const MemoryOptimizedFlatList = ({
       data={processedData}
       renderItem={memoizedRenderItem}
       keyExtractor={memoizedKeyExtractor}
-      getItemLayout={getItemLayout}
+      // getItemLayout={getItemLayout}
+      stickyHeaderIndices={[0]}
+      stickyHeaderHiddenOnScroll
+      ListHeaderComponent={HeaderComponent()}
+      nestedScrollEnabled={true}
+      scrollEventThrottle={16}
+      bounces={true}
       onEndReached={memoizedOnEndReached}
       onEndReachedThreshold={0.5}
       onRefresh={onRefresh}
       refreshing={refreshing}
       ListFooterComponent={ListFooterComponent}
       ListEmptyComponent={ListEmptyComponent}
-      // Memory optimization props
       removeClippedSubviews={true}
       maxToRenderPerBatch={10}
       updateCellsBatchingPeriod={100}
       initialNumToRender={10}
       windowSize={10}
-      // Performance props
-      scrollEventThrottle={16}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
       {...props}

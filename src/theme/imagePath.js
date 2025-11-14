@@ -41,7 +41,7 @@ const imagePath = {
   Rectangle_9: require('../assests/Rectangle_9.png'),
   Rectangle_10: require('../assests/Rectangle_10.png'),
   Rectangle_11: require('../assests/Rectangle_11.png'),
-  Rectangle_12: require('../assests/Rectangle_12.png'),
+  // Rectangle_12: require('../assests/Rectangle_12.png'),
   Rectangle13: require('../assests/Rectangle13.png'),
   Rectangle14: require('../assests/Rectangle14.png'),
 };

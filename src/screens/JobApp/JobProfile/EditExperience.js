@@ -24,7 +24,13 @@ import {KeyboardScroll} from '../../../component';
 import {showToastMessage} from '../../../utils/Toast';
 
 const EditExperience = ({navigation, route}) => {
-  const {jobSeekerData, data, index = null} = route.params;
+  const {
+    jobSeekerData,
+    data,
+    index = null,
+    experience,
+    profileJobseekerData,
+  } = route.params;
   console.log('jobSeekerData-=-=-=-=-=', jobSeekerData);
   const dummyData = {
     jobTitle: '',
@@ -268,7 +274,7 @@ const EditExperience = ({navigation, route}) => {
 
     return value;
   }
-
+  console.log('experience===', experience);
   const handleChange = (key, value) => {
     setFormData({...formData, [key]: value});
   };
@@ -283,42 +289,69 @@ const EditExperience = ({navigation, route}) => {
       showToastMessage('Please fill all the fields', 'danger');
       return;
     }
-    const d = parseIfArrayString(jobSeekerData.experience);
-    const experienceArray = Array.isArray(d) ? d : [];
 
-    // const updatedEducationData = index !== null ?
-    //   d?.map((item, id) => {
-    //     return id == Number(index) ? formData : item
-    //   }) : [
-    //     ...d,
-    //     formData
-    //   ];
-    //  // console.log('Submitting form data:', updatedEducationData);
+    // jobSeekerData is the old education array passed from parent
+    // Parse it to get the existing education entries
+    let oldEducationArray = [];
+    if (Array.isArray(jobSeekerData)) {
+      // If jobSeekerData is directly an array (education array)
+      oldEducationArray = jobSeekerData;
+    } else if (jobSeekerData && jobSeekerData.education) {
+      // If jobSeekerData is an object with education property
+      oldEducationArray = parseIfArrayString(jobSeekerData.education);
+    } else if (profileJobseekerData && profileJobseekerData.education) {
+      // Fallback: get from profileJobseekerData
+      oldEducationArray = parseIfArrayString(profileJobseekerData.education);
+    }
+
+    const educationArray = Array.isArray(oldEducationArray)
+      ? oldEducationArray
+      : [];
+
+    // Parse old experience array
+    let oldExperienceArray = [];
+    if (Array.isArray(experience)) {
+      // If experience is directly an array
+      oldExperienceArray = experience;
+    } else if (typeof experience === 'string') {
+      // If experience is a JSON string
+      oldExperienceArray = parseIfArrayString(experience);
+    } else if (profileJobseekerData && profileJobseekerData.experience) {
+      // Fallback: get from profileJobseekerData
+      oldExperienceArray = parseIfArrayString(profileJobseekerData.experience);
+    }
+
+    const experienceArray = Array.isArray(oldExperienceArray)
+      ? oldExperienceArray
+      : [];
+
+    // Create new experience entry with skills
     const newEntry = {
       ...formData,
       skills: JSON.stringify(selectedSkills),
     };
 
-    let updatedEducationData;
+    // Merge old experience with new experience entry
     const hasValidIndex =
       index !== null && index !== undefined && !Number.isNaN(Number(index));
-    if (hasValidIndex) {
-      updatedEducationData =
-        experienceArray.length > 0
-          ? experienceArray.map((item, id) =>
-              id === Number(index) ? newEntry : item,
-            )
-          : [newEntry];
-    } else {
-      updatedEducationData = [...experienceArray, newEntry];
-    }
+    const updatedExperienceData = hasValidIndex
+      ? experienceArray.length > 0
+        ? experienceArray.map((item, id) =>
+            id === Number(index) ? newEntry : item,
+          )
+        : [newEntry]
+      : [...experienceArray, newEntry];
+
+    // Build payload with full profile data, education, and updated experience
+    const payload = {
+      ...(profileJobseekerData || {}),
+      education: JSON.stringify(educationArray),
+      experience: JSON.stringify(updatedExperienceData),
+    };
 
     await fetch(`https://jobipo.com/api/Agent/doupdatejobp`, {
       method: 'POST',
-      body: JSON.stringify({
-        ...jobSeekerData,
-        experience: JSON.stringify(updatedEducationData),
-      }),
+      body: JSON.stringify(payload),
     })
       .then(res => res.json())
       .then(res => {

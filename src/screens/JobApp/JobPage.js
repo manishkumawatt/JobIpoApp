@@ -298,6 +298,9 @@ const JobPage = ({navigation, route}) => {
   const scrollOffset = useRef(0);
   const isAnimating = useRef(false);
 
+  // Job type filter buttons state
+  const [selectedJobType, setSelectedJobType] = useState('Near by Jobs');
+
   // Constants
   const screenHeight = Dimensions.get('window').height;
 
@@ -550,7 +553,7 @@ const JobPage = ({navigation, route}) => {
       // For reset calls, execute immediately
       return performFetch(reset, showLoading, isClear);
     },
-    [searchQuery, isFilterActive, currentFilter],
+    [searchQuery, isFilterActive, currentFilter, selectedJobType],
   );
 
   const performFetch = useCallback(
@@ -570,6 +573,14 @@ const JobPage = ({navigation, route}) => {
         const storedUserId = await AsyncStorage.getItem('UserID');
         const currentPage = reset ? 1 : currentPageRef.current;
 
+        // Map selectedJobType to API filter key
+        const jobTypeFilterMap = {
+          'Near by Jobs': 'nearby',
+          'Latest Jobs': 'latest',
+          'Trending Jobs': 'trending',
+        };
+        const jobTypeFilter = jobTypeFilterMap[selectedJobType];
+
         // Prepare request body based on whether filter is active
         let requestBody = {
           title: isClear === '' ? '' : isClear ? isClear : searchQuery,
@@ -577,6 +588,11 @@ const JobPage = ({navigation, route}) => {
           limit: JOBS_PER_PAGE,
           user_id: storedUserId,
         };
+
+        // Add job type filter if selected
+        if (jobTypeFilter) {
+          requestBody[jobTypeFilter] = jobTypeFilter;
+        }
 
         // If filter is active, include filter parameters
         if (isFilterActive && currentFilter) {
@@ -586,13 +602,13 @@ const JobPage = ({navigation, route}) => {
           };
         }
         console.log('requestBody-==-==-', requestBody);
-        // const data = await makeApiRequest('/view-job-list', {
         const data = await makeApiRequest('/view-job-list-new', {
+          // const data = await makeApiRequest('/view-job-list-new', {
           method: 'POST',
           body: JSON.stringify(requestBody),
         });
         setTotalRecords(data?.pagination?.total_records);
-
+        console.log('datadata', data);
         if (data?.status === 1) {
           const newJobs = data?.jobs || [];
           if (reset) {
@@ -631,7 +647,7 @@ const JobPage = ({navigation, route}) => {
         setIsLoading(false);
       }
     },
-    [searchQuery, isFilterActive, currentFilter],
+    [searchQuery, isFilterActive, currentFilter, selectedJobType],
   );
 
   const fetchJobTitleSuggestions = useCallback(async text => {
@@ -692,6 +708,14 @@ const JobPage = ({navigation, route}) => {
   useEffect(() => {
     fetchCities(selectedState);
   }, [selectedState, fetchCities]);
+
+  // Fetch jobs when job type filter changes
+  useEffect(() => {
+    if (hasInitialized) {
+      // Reset and fetch jobs when job type changes
+      fetchJobs(true, true);
+    }
+  }, [selectedJobType, hasInitialized, fetchJobs]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -876,7 +900,7 @@ const JobPage = ({navigation, route}) => {
     isFetchingRef.current = false;
     try {
       const storedUserId = await AsyncStorage.getItem('UserID');
-      const data = await makeApiRequest('/view-job-list', {
+      const data = await makeApiRequest('/view-job-list-new', {
         method: 'POST',
         body: JSON.stringify({
           title: '',
@@ -934,8 +958,8 @@ const JobPage = ({navigation, route}) => {
     // Fetch fresh jobs without filters
     try {
       const storedUserId = await AsyncStorage.getItem('UserID');
-
-      const data = await makeApiRequest('/view-job-list', {
+      console.log('JOBS_PER_PAGEJOBS_PER_PAGE', JOBS_PER_PAGE);
+      const data = await makeApiRequest('/view-job-list-new', {
         method: 'POST',
         body: JSON.stringify({
           title: '',
@@ -1072,6 +1096,169 @@ const JobPage = ({navigation, route}) => {
       </View>
     </TouchableOpacity>
   ));
+  const JobHeader = memo(() => (
+    <View style={{backgroundColor: '#F5F4FD'}}>
+      <Carousel
+        loop
+        width={Dimensions.get('window').width - 30}
+        height={70}
+        autoPlay={true}
+        autoPlayInterval={3000}
+        data={carouselData}
+        scrollAnimationDuration={1000}
+        onSnapToItem={index => console.log('current index:', index)}
+        renderItem={({item}) => (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => {
+              navigation.navigate('FromShare');
+              // navigation.navigate('PointsWallet');
+            }}
+            style={[
+              styles.carouselItem,
+              {backgroundColor: item.backgroundColor},
+            ]}>
+            <Image source={item.image} style={styles.carouselImage} />
+            <View style={styles.carouselContent}>
+              <Text style={styles.carouselTitle}>{item.title}</Text>
+              <Text style={styles.carouselSubtitle}>{item.subtitle}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+      />
+
+      <View style={[styles.row, {marginTop: 15, paddingHorizontal: 8}]}>
+        <View style={styles.inputWithIcon}>
+          <TextInput
+            style={styles.input}
+            placeholder="Job Title, Skills, Location"
+            placeholderTextColor="#D0D0D0"
+            value={searchQuery}
+            onChangeText={async text => {
+              handleSearch(text);
+              if (text == '') {
+                setTimeout(() => {
+                  setShowSuggestion(false);
+                }, 1000);
+                setSuggestion([]);
+                // Fetch fresh jobs when search text is cleared
+                await fetchJobs(true, false, '');
+                return;
+              } else {
+                if (text) {
+                  const filteredSuggestions =
+                    await fetchJobTitleSuggestions(text);
+                  if (text.trim() === '') return;
+
+                  setSuggestion(filteredSuggestions);
+                  setShowSuggestion(filteredSuggestions.length > 0);
+                }
+              }
+            }}
+          />
+
+          <Image
+            source={require('../../../assets/Image/icons/search.png')}
+            style={styles.jobImg1}
+            resizeMode="contain"
+          />
+
+          {showSuggestion && (
+            <FlatList
+              keyboardShouldPersistTaps="handled"
+              style={styles.suggestionList}
+              ItemSeparatorComponent={() => (
+                <View style={styles.suggestionSeparator} />
+              )}
+              data={suggestion}
+              renderItem={({item}) => (
+                <Pressable
+                  style={styles.suggestionItem}
+                  onPress={async () => {
+                    setSearchQuery(item?.jobTitle);
+                    setShowSuggestion(false);
+                    // Clear filters when searching
+                    setIsFilterActive(false);
+                    setCurrentFilter(null);
+                    // Fetch jobs without showing loading indicator for suggestion selection
+                    await fetchJobs(true, false, item?.jobTitle);
+                  }}>
+                  <Text>{item?.jobTitle}</Text>
+                </Pressable>
+              )}
+              keyExtractor={(item, index) => index.toString()}
+            />
+          )}
+        </View>
+        <FilterButton />
+      </View>
+      {totalRecords > 0 && (
+        <View
+          style={{
+            marginHorizontal: 15,
+            marginBottom: 10,
+          }}>
+          <Text style={styles.recordsSummaryText}>
+            {`${'we have found ' + `${totalRecords}` + ' ' + (totalRecords === 1 ? 'job' : 'jobs') + ' for you.'}`}
+          </Text>
+        </View>
+      )}
+      {/* <LoadingModal /> */}
+      <View style={styles.jobTypeButtonsContainer}>
+        <TouchableOpacity
+          style={[
+            styles.jobTypeButton,
+            selectedJobType === 'Near by Jobs' && styles.jobTypeButtonSelected,
+          ]}
+          onPress={() => {
+            setSelectedJobType('Near by Jobs');
+          }}>
+          <Text
+            style={[
+              styles.jobTypeButtonText,
+              selectedJobType === 'Near by Jobs' &&
+                styles.jobTypeButtonTextSelected,
+            ]}>
+            Near by Jobs
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.jobTypeButton,
+            selectedJobType === 'Latest Jobs' && styles.jobTypeButtonSelected,
+          ]}
+          onPress={() => {
+            setSelectedJobType('Latest Jobs');
+          }}>
+          <Text
+            style={[
+              styles.jobTypeButtonText,
+              selectedJobType === 'Latest Jobs' &&
+                styles.jobTypeButtonTextSelected,
+            ]}>
+            Latest Jobs
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.jobTypeButton,
+            selectedJobType === 'Trending Jobs' && styles.jobTypeButtonSelected,
+          ]}
+          onPress={() => {
+            setSelectedJobType('Trending Jobs');
+          }}>
+          <Text
+            style={[
+              styles.jobTypeButtonText,
+              selectedJobType === 'Trending Jobs' &&
+                styles.jobTypeButtonTextSelected,
+            ]}>
+            Trending Jobs
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  ));
 
   // const LoadingModal = memo(() => (
   //   <Modal visible={isLoading} transparent={true} animationType="fade">
@@ -1081,135 +1268,10 @@ const JobPage = ({navigation, route}) => {
   //   </Modal>
   // ));
   return (
-    <View style={{flex: 1}}>
+    <View style={{flex: 1, backgroundColor: '#F5F4FD'}}>
       <TopHeaderJob handleReferPress={handleReferPress} />
 
       <View style={styles.container}>
-        {/* <TouchableOpacity style={styles.button}>
-          <Text style={styles.buttonText}>Refer</Text>
-        </TouchableOpacity> */}
-
-        {/* Auto-scrolling Carousel - Sticky Header */}
-        <Animated.View
-          style={[
-            styles.carouselContainer,
-            {
-              transform: [{translateY: carouselTranslateY}],
-              opacity: carouselOpacity,
-            },
-          ]}>
-          <Carousel
-            loop
-            width={Dimensions.get('window').width - 30}
-            height={70}
-            autoPlay={true}
-            autoPlayInterval={3000}
-            data={carouselData}
-            scrollAnimationDuration={1000}
-            onSnapToItem={index => console.log('current index:', index)}
-            renderItem={({item}) => (
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => {
-                  navigation.navigate('FromShare');
-                  // navigation.navigate('PointsWallet');
-                }}
-                style={[
-                  styles.carouselItem,
-                  {backgroundColor: item.backgroundColor},
-                ]}>
-                <Image source={item.image} style={styles.carouselImage} />
-                <View style={styles.carouselContent}>
-                  <Text style={styles.carouselTitle}>{item.title}</Text>
-                  <Text style={styles.carouselSubtitle}>{item.subtitle}</Text>
-                </View>
-              </TouchableOpacity>
-            )}
-          />
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.row,
-            {marginTop: searchBarMarginTop, paddingHorizontal: 8},
-          ]}>
-          <View style={styles.inputWithIcon}>
-            <TextInput
-              style={styles.input}
-              placeholder="Job Title, Skills, Location"
-              placeholderTextColor="#D0D0D0"
-              value={searchQuery}
-              onChangeText={async text => {
-                handleSearch(text);
-                if (text == '') {
-                  setTimeout(() => {
-                    setShowSuggestion(false);
-                  }, 1000);
-                  setSuggestion([]);
-                  // Fetch fresh jobs when search text is cleared
-                  await fetchJobs(true, false, '');
-                  return;
-                } else {
-                  if (text) {
-                    const filteredSuggestions =
-                      await fetchJobTitleSuggestions(text);
-                    if (text.trim() === '') return;
-
-                    setSuggestion(filteredSuggestions);
-                    setShowSuggestion(filteredSuggestions.length > 0);
-                  }
-                }
-              }}
-            />
-
-            <Image
-              source={require('../../../assets/Image/icons/search.png')}
-              style={styles.jobImg1}
-              resizeMode="contain"
-            />
-
-            {showSuggestion && (
-              <FlatList
-                keyboardShouldPersistTaps="handled"
-                style={styles.suggestionList}
-                ItemSeparatorComponent={() => (
-                  <View style={styles.suggestionSeparator} />
-                )}
-                data={suggestion}
-                renderItem={({item}) => (
-                  <Pressable
-                    style={styles.suggestionItem}
-                    onPress={async () => {
-                      setSearchQuery(item?.jobTitle);
-                      setShowSuggestion(false);
-                      // Clear filters when searching
-                      setIsFilterActive(false);
-                      setCurrentFilter(null);
-                      // Fetch jobs without showing loading indicator for suggestion selection
-                      await fetchJobs(true, false, item?.jobTitle);
-                    }}>
-                    <Text>{item?.jobTitle}</Text>
-                  </Pressable>
-                )}
-                keyExtractor={(item, index) => index.toString()}
-              />
-            )}
-          </View>
-          <FilterButton />
-        </Animated.View>
-        {totalRecords > 0 && (
-          <View
-            style={{
-              marginHorizontal: 15,
-              marginBottom: isCarouselVisible ? 10 : 4,
-            }}>
-            <Text style={styles.recordsSummaryText}>
-              {`${'we have found ' + `${totalRecords}` + ' ' + (totalRecords === 1 ? 'job' : 'jobs') + ' for you.'}`}
-            </Text>
-          </View>
-        )}
-        {/* <LoadingModal /> */}
-
         {showFilter && (
           <View
             style={[styles.filterContainerFull, {height: screenHeight - 260}]}>
@@ -1835,8 +1897,7 @@ const JobPage = ({navigation, route}) => {
             onRefresh={handleRefresh}
             loading={isFetchingMore}
             hasMore={hasMoreJobs}
-            // maxItems={100} // Limit to 100 jobs for memory management
-            // itemHeight={200}
+            HeaderComponent={() => <JobHeader />}
           />
         )}
       </View>
@@ -2016,7 +2077,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 5,
   },
   rowS: {
     flexDirection: 'row',
@@ -2484,6 +2545,38 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: {width: 1, height: 1},
     textShadowRadius: 2,
+  },
+  jobTypeButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: 15,
+    marginBottom: 10,
+  },
+  jobTypeButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 4,
+  },
+  jobTypeButtonSelected: {
+    backgroundColor: '#FF8D53',
+    borderColor: '#FF8D53',
+  },
+  jobTypeButtonText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#666',
+    textAlign: 'center',
+  },
+  jobTypeButtonTextSelected: {
+    color: '#fff',
+    fontWeight: '600',
   },
 });
 

@@ -22,17 +22,43 @@ import {KeyboardScroll} from '../../../component';
 import {showToastMessage} from '../../../utils/Toast';
 
 export default function EditEducation({navigation, route}) {
-  const {jobSeekerData, data, index = null} = route.params;
+  const {
+    jobSeekerData,
+    data,
+    index = null,
+    addNew,
+    experience,
+    profileJobseekerData,
+  } = route.params;
 
   useFocusEffect(
     useCallback(() => {
+      // If addNew is true, don't prefill data - use empty form
+      if (addNew) {
+        setEducationData({
+          educationLevel: '',
+          collegeName: '',
+          degree: '',
+          yearOfCompletion: '',
+        });
+        return;
+      }
+
+      // Otherwise, prefill with existing data
       if (Array.isArray(data) && index != null && index < data.length) {
         setEducationData(data[index]);
       } else if (data && typeof data === 'object') {
         setEducationData(data);
       } else {
+        // Reset to empty if no data
+        setEducationData({
+          educationLevel: '',
+          collegeName: '',
+          degree: '',
+          yearOfCompletion: '',
+        });
       }
-    }, [data, index]),
+    }, [data, index, addNew]),
   );
 
   const fetchedData = {
@@ -48,15 +74,21 @@ export default function EditEducation({navigation, route}) {
     yearOfCompletion: '',
   };
 
-  // const [educationData, setEducationData] = useState(data | fetchedData);
+  // Initialize with empty data if addNew is true, otherwise use provided data
   const [educationData, setEducationData] = useState(
-    data ||
-      fetchedData || {
-        educationLevel: '',
-        collegeName: '',
-        degree: '',
-        yearOfCompletion: '',
-      },
+    addNew
+      ? {
+          educationLevel: '',
+          collegeName: '',
+          degree: '',
+          yearOfCompletion: '',
+        }
+      : data || {
+          educationLevel: '',
+          collegeName: '',
+          degree: '',
+          yearOfCompletion: '',
+        },
   );
 
   const colorScheme = useColorScheme();
@@ -159,12 +191,25 @@ export default function EditEducation({navigation, route}) {
       showToastMessage('Please fill all the fields', 'danger');
       return;
     }
-    const raw =
-      jobSeekerData && jobSeekerData.education
-        ? parseIfArrayString(jobSeekerData.education)
-        : [];
-    const educationArray = Array.isArray(raw) ? raw : [];
+    // jobSeekerData is the old education array passed from parent
+    // Parse it to get the existing education entries
+    let oldEducationArray = [];
+    if (Array.isArray(jobSeekerData)) {
+      // If jobSeekerData is directly an array (education array)
+      oldEducationArray = jobSeekerData;
+    } else if (jobSeekerData && jobSeekerData.education) {
+      // If jobSeekerData is an object with education property
+      oldEducationArray = parseIfArrayString(jobSeekerData.education);
+    } else if (profileJobseekerData && profileJobseekerData.education) {
+      // Fallback: get from profileJobseekerData
+      oldEducationArray = parseIfArrayString(profileJobseekerData.education);
+    }
 
+    const educationArray = Array.isArray(oldEducationArray)
+      ? oldEducationArray
+      : [];
+
+    // Merge old education with new education entry
     const hasValidIndex =
       index !== null && index !== undefined && !Number.isNaN(Number(index));
     const updatedEducationData = hasValidIndex
@@ -175,11 +220,23 @@ export default function EditEducation({navigation, route}) {
         : [educationData]
       : [...educationArray, educationData];
 
-    const payload = {
-      ...jobSeekerData,
-      education: JSON.stringify(updatedEducationData),
-    };
+    // Parse experience array if it's a string
+    let experienceArray = [];
+    if (Array.isArray(experience)) {
+      experienceArray = experience;
+    } else if (typeof experience === 'string') {
+      experienceArray = parseIfArrayString(experience);
+    } else if (profileJobseekerData && profileJobseekerData.experience) {
+      experienceArray = parseIfArrayString(profileJobseekerData.experience);
+    }
 
+    // Build payload with full profile data, updated education, and experience
+    const payload = {
+      ...(profileJobseekerData || {}),
+      education: JSON.stringify(updatedEducationData),
+      experience: JSON.stringify(experienceArray),
+    };
+    console.log('payload-===--==-', payload);
     try {
       const response = await fetch(
         `https://jobipo.com/api/Agent/doupdatejobp`,

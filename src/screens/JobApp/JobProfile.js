@@ -30,7 +30,6 @@ import ImagePicker from 'react-native-image-crop-picker';
 import {KeyboardScroll} from '../../component';
 import {showToastMessage} from '../../utils/Toast';
 import ImageLoadView from '../../utils/imageLoadView';
-import moment from 'moment';
 import DatePicker from 'react-native-date-picker';
 import fonts from '../../theme/fonts';
 import Pdf from 'react-native-pdf';
@@ -45,11 +44,8 @@ import {
 } from 'react-native-permissions';
 
 const JobProfile = () => {
-  const [inputValue, setInputValue] = useState('');
   const [focusedInput, setFocusedInput] = useState(null);
   const [locationSelected, setLocationSelected] = useState(false);
-  const [users, setUsers] = useState([]);
-  const [certification, setCertification] = useState('');
   const [cv, setCV] = useState('');
   const [pdfLoadError, setPdfLoadError] = useState(false);
   const [fileUri, setFileUri] = useState(null);
@@ -64,53 +60,28 @@ const JobProfile = () => {
   const [selectedPincode, setSelectedPincode] = useState('');
   const [date, setDate] = useState(new Date());
   const [beginDatePicker, setBeginDatePicker] = useState(false);
-  // Location detail states
-  const [lat, setLat] = useState('');
-  const [lng, setLng] = useState('');
-  const [locationCity, setLocationCity] = useState('');
-  const [locationState, setLocationState] = useState('');
-  const [pincode, setPincode] = useState('');
-  const [area, setArea] = useState('');
   const [jobSeekerData, setJobSeekerData] = useState({
-    fullName: '',
-    gender: '',
-    DOB: '',
-    contactNumber1: '',
-    emailID: '',
-
-    jobseekerId: '',
-    userID: users?.userId,
-    languageKnown: JSON.stringify([]),
-    preferredLocation: '',
     currentLocation: '',
-    homeTown: '',
-    education: JSON.stringify([]),
-    educationLevel: '',
-    yearOfCompletion: '',
-    certification: '',
-    skills: JSON.stringify([]),
-    jobPreference: '',
-    preferredJobCategory: '',
-    preferredJobType: '',
-    preferredEmployementType: '',
-    experience: JSON.stringify([]),
     totalExperience: '',
-    cv: '',
   });
-  const [isLoading, setisLoading] = useState(true);
+  const [education, setEducation] = useState([]);
+  const [experience, setExperience] = useState([]);
   const [formData, setFormData] = useState({
-    photo: users?.photo,
-    name: users?.fullName,
-    gender: users?.gender,
-    dateOfBirth: convertApiDateToDisplay(users?.DOB),
-    email: users?.emailID,
+    photo: '',
+    name: '',
+    gender: '',
+    dateOfBirth: '',
+    email: '',
+    address: '',
+    city: '',
+    state: '',
+    pincode: '',
   });
   const [searchText, setSearchText] = useState('');
   const [filteredSkills, setFilteredSkills] = useState([]);
   const [skillOptions, setSkillOptions] = useState([]);
   const [selectedSkills, setSelectedSkills] = useState([]);
   const [jobCategories, setJobCategories] = useState([]);
-  const [languages, setLanguages] = useState([]);
   const [languageKnown, setLanguageKnown] = useState([]);
   const [employmentType, setEmploymentType] = useState('');
   const [workMode, setWorkMode] = useState('');
@@ -122,80 +93,287 @@ const JobProfile = () => {
   const [filteredTitles, setFilteredTitles] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [photo, setPhoto] = useState(null);
+  const [profileUserData, setProfileUserData] = useState(null);
+  const [profileJobseekerData, setProfileJobseekerData] = useState(null);
+  const [jobseekerId, setJobseekerId] = useState('');
   const navigation = useNavigation();
   const API_BASE_URL = 'https://jobipo.com/api/v3';
   const AUTH_TOKEN = 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6';
 
-  // Parse and set skills from jobSeekerData
-  useFocusEffect(
-    useCallback(() => {
-      if (
-        jobSeekerData?.skills &&
-        jobSeekerData?.userID &&
-        jobSeekerData?.jobseekerId
-      ) {
-        try {
-          const rawSkills = jobSeekerData.skills;
-          let parsedSkills = [];
+  // Populate form data when profileUserData is fetched
+  useEffect(() => {
+    if (profileUserData) {
+      // Map gender from API format ("Male"/"Female"/"Other") to form format ("1"/"2"/"3")
+      const genderMap = {
+        Male: '1',
+        Female: '2',
+        Other: '3',
+      };
 
-          if (Array.isArray(rawSkills)) {
-            parsedSkills = rawSkills;
-          } else if (typeof rawSkills === 'string') {
+      setFormData(prev => ({
+        ...prev,
+        photo: profileUserData.photo || prev.photo,
+        name: profileUserData.fullName || prev.name,
+        gender:
+          genderMap[profileUserData.gender] ||
+          profileUserData.gender ||
+          prev.gender,
+        dateOfBirth: profileUserData.DOB
+          ? convertApiDateToDisplay(profileUserData.DOB)
+          : prev.dateOfBirth,
+        email: profileUserData.email || prev.email,
+      }));
+    }
+  }, [profileUserData]);
+
+  // Populate jobseeker data when profileJobseekerData is fetched
+  useEffect(() => {
+    if (profileJobseekerData) {
+      // Set employment type, work mode, experience level
+      if (profileJobseekerData.preferredEmployementType) {
+        setEmploymentType(profileJobseekerData.preferredEmployementType);
+      }
+      if (profileJobseekerData.workMode) {
+        setWorkMode(profileJobseekerData.workMode);
+      }
+      if (profileJobseekerData.experienceLevel) {
+        setExperienceLevel(
+          profileJobseekerData.experienceLevel == 'fresher years'
+            ? 'fresher'
+            : profileJobseekerData.experienceLevel,
+        );
+      }
+      if (
+        profileJobseekerData.preferred_job_Title ||
+        profileJobseekerData.preferredJobTitle
+      ) {
+        setPreferredJobTitle(
+          profileJobseekerData.preferred_job_Title ||
+            profileJobseekerData.preferredJobTitle,
+        );
+      }
+      if (profileJobseekerData.preferredJobIndustry) {
+        setPreferredJobIndustry(profileJobseekerData.preferredJobIndustry);
+      }
+      if (
+        profileJobseekerData.current_salary ||
+        profileJobseekerData.currentSalary
+      ) {
+        setCurrentSalary(
+          profileJobseekerData.current_salary ||
+            profileJobseekerData.currentSalary,
+        );
+      }
+      if (profileJobseekerData.currentLocation) {
+        setPreferredLocations(profileJobseekerData.currentLocation);
+      }
+      if (
+        profileJobseekerData.city &&
+        profileJobseekerData.city !== 'undefined'
+      ) {
+        setSelectedCity(profileJobseekerData.city);
+      }
+      if (
+        profileJobseekerData.state &&
+        profileJobseekerData.state !== 'undefined'
+      ) {
+        setSelectedState(profileJobseekerData.state);
+      }
+      if (
+        profileJobseekerData.pin_code &&
+        profileJobseekerData.pin_code !== 'undefined'
+      ) {
+        setSelectedPincode(profileJobseekerData.pin_code);
+      }
+      if (profileJobseekerData.englishSpeaking) {
+        setEnglishSpeaking(profileJobseekerData.englishSpeaking);
+      }
+      if (profileJobseekerData.totalExperience) {
+        // Update jobSeekerData if needed
+        setJobSeekerData(prev => ({
+          ...prev,
+          totalExperience: profileJobseekerData.totalExperience,
+        }));
+      }
+      if (profileJobseekerData.education) {
+        // Update jobSeekerData if needed
+        setEducation(prev => ({
+          ...prev,
+          education: profileJobseekerData.education,
+        }));
+      }
+      if (profileJobseekerData.experience) {
+        // Update jobSeekerData if needed
+        setExperience(prev => ({
+          ...prev,
+          experience: profileJobseekerData.experience,
+        }));
+      }
+      // Parse and set skills
+      if (profileJobseekerData.skills) {
+        try {
+          let parsedSkills = [];
+          if (Array.isArray(profileJobseekerData.skills)) {
+            parsedSkills = profileJobseekerData.skills;
+          } else if (typeof profileJobseekerData.skills === 'string') {
             try {
-              const jsonParsed = JSON.parse(rawSkills);
+              const jsonParsed = JSON.parse(profileJobseekerData.skills);
               parsedSkills = Array.isArray(jsonParsed)
                 ? jsonParsed
                 : jsonParsed.split(',').map(s => s.trim());
             } catch {
-              parsedSkills = rawSkills.split(',').map(s => s.trim());
+              parsedSkills = profileJobseekerData.skills
+                .split(',')
+                .map(s => s.trim());
             }
           }
-
           const cleanSkills = parsedSkills
             .map(skill => skill.replace(/^["']|["']$/g, '').trim())
             .filter(skill => skill && skill.length > 0);
-
           setSelectedSkills(cleanSkills);
-        } catch {
-          setSelectedSkills([]);
+        } catch (error) {
+          console.error('Error parsing skills:', error);
         }
       }
-    }, [jobSeekerData]),
-  );
-  useEffect(() => {
-    if (users) {
-      setFormData({
-        photo: users.photo || '',
-        name: users.fullName || '',
-        gender: users.gender || '',
-        dateOfBirth: convertApiDateToDisplay(users?.DOB) || '',
-        email: users.emailID || '',
-      });
+
+      // Parse and set language known
+      if (profileJobseekerData?.languageKnown) {
+        try {
+          let parsedLanguages = [];
+          const languageData = profileJobseekerData.languageKnown;
+
+          // If already an array, use it directly
+          if (Array.isArray(languageData)) {
+            parsedLanguages = languageData;
+          } else if (typeof languageData === 'string') {
+            let jsonString = languageData.trim();
+
+            // Remove outer quotes if present: "\"[...]\"" -> "[...]"
+            if (jsonString.startsWith('"') && jsonString.endsWith('"')) {
+              jsonString = jsonString.slice(1, -1);
+            }
+
+            // Try parsing once
+            try {
+              let firstParse = JSON.parse(jsonString);
+
+              // If result is still a string, parse again (double-encoded)
+              if (typeof firstParse === 'string') {
+                try {
+                  const secondParse = JSON.parse(firstParse);
+                  parsedLanguages = Array.isArray(secondParse)
+                    ? secondParse
+                    : [];
+                } catch {
+                  // If second parse fails, check if it's a comma-separated string
+                  parsedLanguages = firstParse
+                    .split(',')
+                    .map(l => l.trim())
+                    .filter(l => l);
+                }
+              } else if (Array.isArray(firstParse)) {
+                parsedLanguages = firstParse;
+              } else {
+                parsedLanguages = [];
+              }
+            } catch (firstParseError) {
+              // If first parse fails, try parsing the original string directly
+              try {
+                const directParse = JSON.parse(languageData);
+                parsedLanguages = Array.isArray(directParse) ? directParse : [];
+              } catch {
+                // If all parsing fails, treat as comma-separated string
+                parsedLanguages = languageData
+                  .split(',')
+                  .map(l => l.trim())
+                  .filter(l => l);
+              }
+            }
+          }
+
+          // Clean up the languages array (remove quotes, trim, filter empty)
+          parsedLanguages = parsedLanguages
+            .map(lang => {
+              if (typeof lang === 'string') {
+                return lang.replace(/^["']|["']$/g, '').trim();
+              }
+              return lang;
+            })
+            .filter(lang => lang && lang.length > 0);
+
+          setLanguageKnown(parsedLanguages);
+          console.log('Parsed languages:', parsedLanguages);
+        } catch (error) {
+          console.error('Error parsing languages:', error);
+          setLanguageKnown([]);
+        }
+      }
+
+      // Set location coordinates if available
+      if (profileJobseekerData.cllat) {
+        setPllat(profileJobseekerData.cllat);
+      }
+      if (profileJobseekerData.cllng) {
+        setPllng(profileJobseekerData.cllng);
+      }
+
+      // Set current location if available
+      if (
+        profileJobseekerData.currentLocation &&
+        profileJobseekerData.currentLocation !== 'undefined'
+      ) {
+        setJobSeekerData(prev => ({
+          ...prev,
+          currentLocation: profileJobseekerData.currentLocation,
+        }));
+      }
+
+      // Set city, state, pincode from jobseekerData if available
+      if (
+        profileJobseekerData.city &&
+        profileJobseekerData.city !== 'undefined'
+      ) {
+        setSelectedCity(profileJobseekerData.city);
+        setFormData(prev => ({
+          ...prev,
+          city: profileJobseekerData.city,
+        }));
+      }
+      if (
+        profileJobseekerData.state &&
+        profileJobseekerData.state !== 'undefined'
+      ) {
+        setSelectedState(profileJobseekerData.state);
+        setFormData(prev => ({
+          ...prev,
+          state: profileJobseekerData.state,
+        }));
+      }
+      if (
+        profileJobseekerData.pin_code &&
+        profileJobseekerData.pin_code !== 'undefined'
+      ) {
+        setSelectedPincode(profileJobseekerData.pin_code);
+        setFormData(prev => ({
+          ...prev,
+          pincode: profileJobseekerData.pin_code,
+        }));
+      }
     }
-  }, [users]);
+  }, [profileJobseekerData]);
+
   useEffect(() => {
-    fetchProfile();
-    GetDataFunc();
+    fetchSkills();
+    fetchJobTitles();
+    fetchJobCategories();
   }, []);
   // Fetch skill options
   useFocusEffect(
     useCallback(() => {
-      const fetchSkills = async () => {
-        try {
-          const res = await fetch(`https://jobipo.com/api/v2/job-data`, {
-            method: 'GET',
-          });
-          const langData = await res.json();
-          const list = JSON.parse(langData?.msg)?.skill?.map(
-            item => item.skill,
-          );
-          setSkillOptions(list || []);
-        } catch (error) {
-          // Silently handle error
-        }
-      };
-      fetchProfile();
-      fetchSkills();
+      methodGetProfile();
+      // fetchSkills();
+      // fetchJobTitles();
+      // fetchJobCategories();
     }, []),
   );
   useEffect(() => {
@@ -209,6 +387,18 @@ const JobProfile = () => {
     }
   }, [searchText, skillOptions]);
 
+  const fetchSkills = async () => {
+    try {
+      const res = await fetch(`https://jobipo.com/api/v2/job-data`, {
+        method: 'GET',
+      });
+      const langData = await res.json();
+      const list = JSON.parse(langData?.msg)?.skill?.map(item => item.skill);
+      setSkillOptions(list || []);
+    } catch (error) {
+      // Silently handle error
+    }
+  };
   const handleSelectSkill = skill => {
     setSearchText('');
     setFilteredSkills([]);
@@ -225,187 +415,90 @@ const JobProfile = () => {
     setSelectedSkills(updatedSkills);
   };
 
-  const GetDataFunc = async () => {
-    try {
-      const storedUserId = await AsyncStorage.getItem('UserID');
-
-      if (!storedUserId) {
-        showToastMessage('UserID not found. Please login again.', 'danger');
-        signOut();
-        return;
-      }
-
-      const formdata = new FormData();
-      formdata.append('user_id', storedUserId);
-      formdata.append('action', 'dashboard');
-
-      const response = await fetch('https://jobipo.com/api/v2/dashboard', {
-        method: 'POST',
-        body: formdata,
-      });
-
-      const sliderDataApi = await response.json();
-
-      if (sliderDataApi.logout !== 1) {
-        const parsedMsg = JSON.parse(sliderDataApi?.msg);
-        const userData = parsedMsg?.users;
-        const jobSeekerData = parsedMsg?.jobseeker;
-        setUsers(userData);
-
-        const certificationName = await AsyncStorage.getItem('certification');
-        const cv = await AsyncStorage.getItem('cv');
-        setCertification(certificationName);
-        // setCV(cv);
-
-        if (jobSeekerData) {
-          setJobSeekerData({
-            ...jobSeekerData,
-            photo: userData?.photo,
-            userID: userData?.userID,
-            fullName: userData?.fullName,
-            gender: userData?.gender,
-            DOB: userData?.DOB,
-            contactNumber1: userData?.contactNumber1,
-            emailID: userData?.emailID,
-          });
-        } else {
-          setJobSeekerData({
-            fullName: userData?.fullName,
-            gender: userData?.gender,
-            DOB: userData?.DOB,
-            photo: userData?.photo,
-            contactNumber1: userData?.contactNumber1,
-            emailID: userData?.emailID,
-
-            jobseekerId: '',
-            userID: userData?.userID,
-            languageKnown: JSON.stringify([]),
-            preferredLocation: '',
-            currentLocation: '',
-            homeTown: '',
-            education: JSON.stringify([]),
-            educationLevel: '',
-            certification: '',
-            skills: JSON.stringify([]),
-            jobPreference: '',
-            preferredJobCategory: '',
-            preferredJobType: '',
-            preferredEmployementType: '',
-            experience: JSON.stringify([]),
-            totalExperience: '',
-            cv: '',
-          });
-        }
-
-        setisLoading(false);
-      } else {
-        signOut();
-      }
-    } catch (error) {
-      showToastMessage('Something went wrong.', 'danger');
-    }
-  };
-  const fetchProfile = async () => {
+  const methodGetProfile = async () => {
     try {
       const userID = await AsyncStorage.getItem('UserID');
 
       if (!userID) {
-        showToastMessage('User ID not found. Please log in again.', 'danger');
+        showToastMessage('User ID not found. Please login again.', 'danger');
         return;
       }
+
+      const form = new FormData();
+      form.append('userID', userID); // Changed to uppercase UserID as API expects
+
       const response = await fetch(
-        `https://jobipo.com/api/v3/view-profile?UserID=${userID}`,
+        `https://jobipo.com/api/v3/view-candidate-profile`,
+        {
+          headers: {
+            // Don't set Content-Type manually - fetch will set it automatically with boundary
+            Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          },
+          method: 'POST',
+          body: form,
+        },
+      );
+
+      console.log('form-----=--==-=--=-=1', form);
+      const data = await response.json();
+      console.log('getProfile-----=--==-=--=-=1', data);
+
+      if (data?.success && data?.userData) {
+        setProfileUserData(data.userData);
+      }
+      setJobseekerId(data?.jobseekerId);
+      if (data?.success && data?.jobseekerData) {
+        setProfileJobseekerData(data?.jobseekerData);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error in methodGetProfile:', error);
+      showToastMessage('Failed to fetch profile data.', 'danger');
+    }
+  };
+
+  const fetchJobTitles = async () => {
+    try {
+      const response = await fetch(
+        'https://jobipo.com/api/v3/fetch-job-titles',
         {
           method: 'GET',
           headers: {
-            'Content-Type': 'application/json',
             Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
           },
         },
       );
 
-      const data = await response.json();
-      console.log('data=--==-=--=-=1', data);
-      const profileData = data.data;
+      const result = await response.json();
 
-      setEmploymentType(profileData.preferredEmployementType || '');
-      setWorkMode(profileData.workMode || '');
-      setExperienceLevel(
-        profileData.totalExperience
-          ? `${profileData.totalExperience} years`
-          : '',
-      );
-      setPreferredJobTitle(profileData.preferredJobTitle || '');
-      setPreferredJobIndustry(profileData.preferredJobIndustry || '');
-      setCurrentSalary(profileData.current_salary || '');
-      setPreferredLocations(profileData?.preferredLocation || '');
-      setEnglishSpeaking(profileData.englishSpeaking || '');
-      setPhoto(profileData.photo || null);
-      setCV(profileData.cv || null);
-      setPdfLoadError(false); // Reset error state when new CV is loaded
-
-      try {
-        const decoded = JSON.parse(JSON.parse(profileData.languageKnown));
-        setLanguageKnown(Array.isArray(decoded) ? decoded : []);
-      } catch {
-        setLanguageKnown([]);
+      if (result?.status === 1 && result?.msg) {
+        const parsed = JSON.parse(result.msg);
+        setJobTitles(parsed);
       }
     } catch (error) {
-      showToastMessage('Failed to fetch profile. Please try again.', 'danger');
+      // Silently handle error
     }
   };
-  // Remove unused keyboard listeners - no functionality implemented
-  useFocusEffect(
-    useCallback(() => {
-      const fetchJobTitles = async () => {
-        try {
-          const response = await fetch(
-            'https://jobipo.com/api/v3/fetch-job-titles',
-            {
-              method: 'GET',
-              headers: {
-                Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
-              },
-            },
-          );
+  // Language options - can be fetched from API if needed
+  const languageOptions = [
+    'Hindi',
+    'English',
+    'Panjabi',
+    'Gujarati',
+    'Bengali',
+    'Tamil',
+    'Telugu',
+    'Marathi',
+    'Kannada',
+    'Malayalam',
+    'Odia',
+    'Assamese',
+    'Urdu',
+    'Sanskrit',
+  ];
 
-          const result = await response.json();
-
-          if (result?.status === 1 && result?.msg) {
-            const parsed = JSON.parse(result.msg);
-            setJobTitles(parsed);
-          }
-        } catch (error) {
-          // Silently handle error
-        }
-      };
-
-      fetchJobTitles();
-      fetchJobCategories();
-    }, []),
-  );
-  useFocusEffect(
-    useCallback(() => {
-      const GetDataFunc = async () => {
-        try {
-          const langData = await fetch(`https://jobipo.com/api/Agent/jobdata`, {
-            method: 'GET',
-          }).then(res => res.json());
-
-          const list = JSON.parse(langData?.msg)?.language?.map(
-            item => item.language,
-          );
-          setLanguages(list || []);
-        } catch (error) {
-          // Silently handle error
-        }
-      };
-
-      GetDataFunc();
-    }, []),
-  );
-
-  const filteredLanguages = languages.filter(
+  const filteredLanguages = languageOptions.filter(
     lang =>
       lang.toLowerCase().includes(searchText.toLowerCase()) &&
       !languageKnown.includes(lang),
@@ -484,8 +577,10 @@ const JobProfile = () => {
     }
     return displayDate;
   }
-
+  console.log('profileJobseekerData', profileJobseekerData);
   const handleSubmit = async () => {
+    console.log('selectedSkills-==-=--=-=', selectedSkills);
+
     try {
       const userID = await AsyncStorage.getItem('UserID');
 
@@ -497,13 +592,14 @@ const JobProfile = () => {
       const submissionData = new FormData();
 
       submissionData.append('userID', userID);
+      submissionData.append('jobseekerId', jobseekerId);
       submissionData.append('preferredEmployementType', employmentType);
       submissionData.append('workMode', workMode);
       submissionData.append('experienceLevel', experienceLevel);
       submissionData.append('preferred_job_Title', preferredJobTitle);
       submissionData.append('preferredJobIndustry', preferredJobIndustry);
       submissionData.append('current_salary', currentSalary);
-      submissionData.append('skills', selectedSkills);
+      submissionData.append('skills', JSON.stringify(selectedSkills));
       submissionData.append('preferredLocation', preferredLocations);
       submissionData.append('pllat', pllat);
       submissionData.append('pllng', pllng);
@@ -514,9 +610,12 @@ const JobProfile = () => {
         convertDisplayDateToApi(formData.dateOfBirth),
       );
       submissionData.append('gender', formData.gender);
-      submissionData.append('city', formData.city);
-      submissionData.append('state', formData.state);
-      submissionData.append('pin_code', formData.pincode);
+      submissionData.append('city', formData.city || selectedCity || '');
+      submissionData.append('state', formData.state || selectedState || '');
+      submissionData.append(
+        'pin_code',
+        formData.pincode || selectedPincode || '',
+      );
       if (photo && photo.uri) {
         submissionData.append('photo', {
           uri: photo.uri,
@@ -526,7 +625,7 @@ const JobProfile = () => {
       }
       console.log('submissionDatasubmissionData', submissionData);
       const res = await fetch(
-        'https://jobipo.com/api/v3/candidate-profile-update',
+        'https://jobipo.com/api/v3/update-candidate-profile',
         {
           method: 'POST',
           headers: {
@@ -537,12 +636,12 @@ const JobProfile = () => {
       );
 
       const data = await res.json();
-
-      if (data.status === 1) {
+      console.log('data-=-----==-=-=-=', data);
+      if (data?.success) {
         showToastMessage('Profile updated successfully', 'success');
         navigation.navigate('JobPage');
       } else {
-        showToastMessage(data.message || 'Something went wrong.', 'danger');
+        showToastMessage(data?.message || 'Something went wrong.', 'danger');
       }
     } catch (err) {
       showToastMessage('Something went wrong. Please try again.', 'danger');
@@ -602,8 +701,7 @@ const JobProfile = () => {
   }, []);
 
   // Handle location selection - can be called from location picker screen/modal
-  const handleLocationSelect = useCallback(location => {
-    console.log('handleLocationSelect called with:', location);
+  const handleLocationSelect = useCallback(() => {
     setLocationSelected(true);
   }, []);
 
@@ -625,41 +723,6 @@ const JobProfile = () => {
         city: city,
         pincode: pincode,
       }));
-
-      console.log('=== handleLocationPickerResult called ===');
-      console.log('current_location:', current_location);
-      console.log('lat:', lat);
-      console.log('lng:', lng);
-      console.log('city:', city);
-      console.log('state:', state);
-      console.log('selectedState:', selectedState);
-      console.log('pincode:', pincode);
-      console.log('area:', area);
-
-      // // Update currentLocation first
-      // if (area) {
-      //   handleLocationSelect(current_location);
-      // }
-
-      // Set location details
-      if (lat) {
-        setLat(String(lat));
-      }
-      if (lng) {
-        setLng(String(lng));
-      }
-      if (city) {
-        setLocationCity(city);
-      }
-      if (state) {
-        setLocationState(state);
-      }
-      if (pincode) {
-        setPincode(pincode);
-      }
-      if (area) {
-        setArea(area);
-      }
     },
     [handleLocationSelect],
   );
@@ -751,9 +814,10 @@ const JobProfile = () => {
         }
         setCV(cvUrl);
         setPdfLoadError(false); // Reset error state for new CV
-      } else {
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error('Error uploading resume:', err);
+    }
   };
   const openGalleryView = async () => {
     try {
@@ -766,12 +830,6 @@ const JobProfile = () => {
       if (res && res[0]) {
         const file = res[0];
         const fileSizeInMB = file.size ? file.size / (1024 * 1024) : 0;
-
-        // Validate file size (5MB max)
-        // if (fileSizeInMB > 5) {
-        //   showToastMessage('File size exceeds 5MB limit', 'danger');
-        //   return;
-        // }
 
         // Validate file type
         const fileName = file.name || '';
@@ -803,7 +861,7 @@ const JobProfile = () => {
       }
     }
   };
-
+  console.log('education-===--==-', education);
   const checkMediaPermissions = async (type = 'gallery', cb) => {
     try {
       // Determine the appropriate permission based on platform and Android version
@@ -886,7 +944,7 @@ const JobProfile = () => {
   const handleSelectResume = async () => {
     methodForPermission('gallery');
   };
-  console.log('CV-=-=-=-=-', cv);
+  console.log('profileUserData?.photo-=-=-=-=-', profileUserData?.photo);
   return (
     <>
       {/* <JobHeader /> */}
@@ -902,7 +960,10 @@ const JobProfile = () => {
               <View style={styles.profileImageWrapper}>
                 <ImageLoadView
                   resizeMode="cover"
-                  source={{uri: photo?.uri || formData?.photo}}
+                  source={{
+                    uri:
+                      photo?.uri || profileUserData?.photo || formData?.photo,
+                  }}
                   style={styles.profileImage}
                 />
                 <TouchableOpacity
@@ -913,12 +974,14 @@ const JobProfile = () => {
               </View>
 
               <View style={styles.profileTextContainer}>
-                <Text style={styles.profileName}>{users['fullName']}</Text>
+                <Text style={styles.profileName}>
+                  {profileUserData?.fullName}
+                </Text>
                 <View style={styles.profileRow}>
                   <PhoneIcon />
                   <Text style={styles.profileValue}>
                     {' '}
-                    {users['contactNumber1']}
+                    {profileUserData?.mobile}
                   </Text>
                 </View>
               </View>
@@ -936,7 +999,7 @@ const JobProfile = () => {
                 onChangeText={value =>
                   setFormData(prevData => ({...prevData, email: value}))
                 }
-                editable={!formData.email}
+                editable={false}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 onFocus={() => {
@@ -1094,14 +1157,6 @@ const JobProfile = () => {
                     color: experienceLevel ? '#000' : '#D0D0D0',
                   }}
                   dropdownIconColor="#000">
-                  {/* <Picker.Item label="0-1 Year" value="" /> */}
-                  {/* <Picker.Item label="0-1 Year" value="0-1" color="#D0D0D0" />
-                  <Picker.Item label="1-2 Years" value="1-2" />
-                  <Picker.Item label="2-3 Years" value="2-3" />
-                  <Picker.Item label="3-5 Years" value="3-5" />
-                  <Picker.Item label="5-7 Years" value="5-7" />
-                  <Picker.Item label="7-10 Years" value="7-10" /> */}
-
                   <Picker.Item label="Select Experience" value="" />
                   <Picker.Item label="Fresher" value="fresher" />
                   <Picker.Item label="0-1 Years" value="0-1 years" />
@@ -1142,23 +1197,6 @@ const JobProfile = () => {
                 </ScrollView>
               )}
 
-              {/* <Text style={styles.label}>Preferred Job Title</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter Job Title"
-              placeholderTextColor={isDarkMode ? '#D0D0D0' : '#D0D0D0'}
-             value={preferredJobTitle}
-             onChangeText={setPreferredJobTitle}
-            /> */}
-
-              {/* <Text style={styles.label}>Job Role</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter Job Role"
-              placeholderTextColor="#555"
-              value={formData.jobRole}
-              onChangeText={(text) => handleChange('jobRole', text)}
-            /> */}
               <Text style={styles.label}>Preferred Job Industry</Text>
               <View style={styles.pickerWrapper}>
                 <Picker
@@ -1287,46 +1325,7 @@ const JobProfile = () => {
                 }}>
                 <Text style={styles.label}>Preferred Location</Text>
               </View>
-              {/* <PlacesAutocomplete
-                apiKey={'AIzaSyDqBEtr9Djdq0b9NTCMmquSrKiPCCv384o'}
-                value={preferredLocations}
-                onPlaceSelected={(address, placeId, val) => {
-                  setPreferredLocations(val.Locality);
-                  setPllat(val.lat);
-                  setPllng(val.lng);
-                  setLocationSelected(true); // Mark location as selected
 
-                  // Extract state, city and pincode with fallbacks
-                  const extractedState = val.state || '';
-                  const extractedCity = val.city || '';
-                  const extractedPincode =
-                    val.pincode || extractPincodeFromAddress(address);
-
-                  setSelectedState(extractedState);
-                  setSelectedCity(extractedCity);
-                  setSelectedPincode(extractedPincode);
-
-                  setFormData(prev => ({
-                    ...prev,
-                    address,
-                    state: extractedState,
-                    city: extractedCity,
-                    pincode: extractedPincode,
-                  }));
-                }}
-                showSuggestions={
-                  focusedInput === 'location' && !locationSelected
-                }
-                onFocus={() => {
-                  setFocusedInput('location');
-                  // If location is already selected, allow editing by resetting the selection
-                  if (locationSelected) {
-                    setLocationSelected(false);
-                  }
-                }}
-                onBlur={() => setFocusedInput(null)}
-              /> */}
-              {/* Current Location Field */}
               <View style={{}}>
                 <Pressable
                   style={styles.locationInput}
@@ -1347,94 +1346,9 @@ const JobProfile = () => {
                       ]}>
                       {preferredLocations || 'Current Location'}
                     </Text>
-                    {/* {(locationCity || locationState || area) && (
-                          <Text style={styles.locationSubText}>
-                            {[locationCity, area, locationState]
-                              .filter(Boolean)
-                              .join(', ')}
-                          </Text>
-                        )} */}
                   </View>
                 </Pressable>
-                {/* {accountReq.validators.current_location.error ? (
-                      <Text style={styles.errorText}>
-                        {accountReq.validators.current_location.error}
-                      </Text>
-                    ) : null} */}
               </View>
-              {/* {selectedCity ? (
-                <View>
-                  <Text style={styles.label}>City</Text>
-                  <TextInput
-                    editable={false}
-                    style={[
-                      styles.input_state,
-                      selectedCity && {backgroundColor: '#ffffff'},
-                    ]}
-                    placeholder="City"
-                    value={selectedCity}
-                    onChangeText={value => {
-                      setSelectedCity(value);
-                      setFormData(prev => ({...prev, city: value}));
-                    }}
-                    onFocus={() => setFocusedInput('city')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
-                </View>
-              ) : (
-                <View />
-              )}
-
-              {selectedState ? (
-                <View>
-                  <Text style={styles.label}>State</Text>
-                  <TextInput
-                    editable={false}
-                    style={[
-                      styles.input_state,
-                      selectedState && {backgroundColor: '#ffffff'},
-                    ]}
-                    placeholder="State"
-                    value={selectedState}
-                    onChangeText={value => {
-                      setSelectedState(value);
-                      setFormData(prev => ({...prev, state: value}));
-                    }}
-                    onFocus={() => setFocusedInput('state')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
-                </View>
-              ) : (
-                <View />
-              )}
-
-              {selectedPincode ? (
-                <View>
-                  <Text style={styles.label}>Pincode</Text>
-                  <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                    <TextInput
-                      style={[
-                        styles.input,
-                        selectedPincode && {backgroundColor: '#ffffff'},
-                        {flex: 1, marginRight: 8},
-                      ]}
-                      placeholder="Pincode"
-                      value={selectedPincode}
-                      onChangeText={value => {
-                        setSelectedPincode(value);
-                        setFormData(prev => ({...prev, pincode: value}));
-                      }}
-                      onFocus={() => setFocusedInput('pincode')}
-                      onBlur={() => setFocusedInput(null)}
-                      keyboardType="numeric"
-                      maxLength={6}
-                      editable={false}
-                    />
-                  </View>
-                </View>
-              ) : (
-                <View />
-              )} */}
             </View>
           </View>
 
@@ -1501,23 +1415,6 @@ const JobProfile = () => {
                 </View>
               ))}
             </View>
-
-            {/* <Text style={styles.label}>Other Language</Text>
- <View style={styles.pickerWrapper}>
-      <Picker
-        selectedValue={selectedLanguage}
-        onValueChange={(itemValue) => setSelectedLanguage(itemValue)}
-        style={{
-    color: selectedLanguage ? '#000' : '#D0D0D0', 
-  }}  
-      >
-        <Picker.Item label="Select a language" value="" />
-        {languages.map((lang, index) => (
-          <Picker.Item key={index} label={lang} value={lang} />
-        ))}
-      </Picker>
-</View>
-  */}
           </View>
 
           <View style={styles.PersonalContainer}>
@@ -1532,12 +1429,15 @@ const JobProfile = () => {
               <View style={styles.infoValue}>
                 <TouchableOpacity
                   style={styles.addButton}
-                  onPress={() =>
+                  onPress={() => {
                     navigation.navigate('EditEducation', {
-                      jobSeekerData,
+                      jobSeekerData: education,
+                      experience: experience,
+                      profileJobseekerData: profileJobseekerData,
                       data: null,
-                    })
-                  }>
+                      addNew: true,
+                    });
+                  }}>
                   <Text style={styles.addButtonText}>+ Add</Text>
                 </TouchableOpacity>
               </View>
@@ -1549,7 +1449,7 @@ const JobProfile = () => {
                   <Text style={styles.skillsText}>No education added yet.</Text>
                 </View>
               )}
-              data={parseIfArrayString(jobSeekerData?.education)}
+              data={parseIfArrayString(profileJobseekerData?.education)}
               keyExtractor={item => item?.id}
               renderItem={({item, index}) => {
                 return (
@@ -1566,11 +1466,7 @@ const JobProfile = () => {
                       </View>
                       <View style={styles.jobDetails}>
                         <Text style={styles.jobTitle}>
-                          {item?.degree
-                            ? item.degree
-                            : jobSeekerData?.educationLevel
-                              ? jobSeekerData?.educationLevel
-                              : 'Degree Not Mentioned'}
+                          {item?.degree ? item.degree : 'Degree Not Mentioned'}
                         </Text>
                         <Text style={styles.companyName}>
                           {item?.collegeName
@@ -1588,7 +1484,9 @@ const JobProfile = () => {
                         style={styles.jobEdit}
                         onPress={() =>
                           navigation.navigate('EditEducation', {
-                            jobSeekerData,
+                            jobSeekerData: education,
+                            experience: experience,
+                            profileJobseekerData: profileJobseekerData,
                             data: item,
                             index,
                           })
@@ -1621,7 +1519,9 @@ const JobProfile = () => {
                   style={styles.addButton}
                   onPress={() =>
                     navigation.navigate('EditExperience', {
-                      jobSeekerData,
+                      jobSeekerData: education,
+                      experience: experience,
+                      profileJobseekerData: profileJobseekerData,
                       data: null,
                     })
                   }>
@@ -1638,7 +1538,7 @@ const JobProfile = () => {
                   </Text>
                 </View>
               )}
-              data={parseIfArrayString(jobSeekerData?.experience)}
+              data={parseIfArrayString(profileJobseekerData?.experience)}
               keyExtractor={item => item?.id}
               renderItem={({item, index}) => {
                 return (
@@ -1664,7 +1564,9 @@ const JobProfile = () => {
                             style={styles.jobEdit}
                             onPress={() =>
                               navigation.navigate('EditExperience', {
-                                jobSeekerData,
+                                jobSeekerData: education,
+                                experience: experience,
+                                profileJobseekerData: profileJobseekerData,
                                 data: item,
                                 index,
                               })
@@ -1799,33 +1701,7 @@ const JobProfile = () => {
           </TouchableOpacity>
         </View>
       </KeyboardScroll>
-      {/* <Modal visible={modalVisible} transparent animationType="fade">
-  <View style={styles.modalOverlay}>
-    <View style={styles.modalContainer}>
-      <Text style={styles.modalTitle}>Update {currentField}</Text>
 
-      <TextInput
-        style={styles.input}
-        value={inputValue}
-        onChangeText={(text) => setInputValue(text)}
-        placeholder={`Enter ${currentField}`}
-        placeholderTextColor="#aaa"
-      />
-
-      <View style={styles.modalButtons}>
-        <TouchableOpacity style={styles.modalButton} onPress={saveChanges}>
-          <Text style={styles.buttonText}>Save</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.modalButton, { backgroundColor: '#FF5C5C' }]}
-          onPress={() => setModalVisible(false)}
-        >
-          <Text style={styles.buttonText}>Cancel</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  </View>
-</Modal> */}
       {beginDatePicker && (
         <DatePicker
           modal
@@ -1834,7 +1710,14 @@ const JobProfile = () => {
           open={beginDatePicker}
           date={date}
           onConfirm={date => {
-            dateSelectMethod(date);
+            const formatted = convertApiDateToDisplay(
+              date.toISOString().split('T')[0],
+            );
+            setFormData(prev => ({
+              ...prev,
+              dateOfBirth: formatted,
+            }));
+            setBeginDatePicker(false);
           }}
           onCancel={() => {
             setBeginDatePicker(false);
