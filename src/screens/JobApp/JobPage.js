@@ -587,20 +587,23 @@ const JobPage = ({navigation, route}) => {
           page: currentPage,
           limit: JOBS_PER_PAGE,
           user_id: storedUserId,
+          sort: jobTypeFilter,
         };
+        // // Add job type filter if selected
+        // if (jobTypeFilter) {
+        //   requestBody[jobTypeFilter] = 1;
+        // }
 
-        // Add job type filter if selected
-        if (jobTypeFilter) {
-          requestBody[jobTypeFilter] = jobTypeFilter;
-        }
+        // // If filter is active, include filter parameters
+        // if (isFilterActive && currentFilter) {
+        //   requestBody = {
+        //     ...requestBody,
+        //     ...currentFilter,
+        //   };
+        // }
+        console.log('jobTypeFilter-=-=-=-=-', jobTypeFilter);
+        console.log('selectedJobType-=-=-=-=-', selectedJobType);
 
-        // If filter is active, include filter parameters
-        if (isFilterActive && currentFilter) {
-          requestBody = {
-            ...requestBody,
-            ...currentFilter,
-          };
-        }
         console.log('requestBody-==-==-', requestBody);
         const data = await makeApiRequest('/view-job-list-new', {
           // const data = await makeApiRequest('/view-job-list-new', {

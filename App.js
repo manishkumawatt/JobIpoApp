@@ -709,6 +709,25 @@ export default function App() {
           animation: 'none',
         }),
       },
+
+      {
+        id: 64,
+        name: 'RegistrationS',
+        component: RegistrationS,
+        option: ({route}) => ({
+          headerShown: false,
+          animation: 'none',
+        }),
+      },
+      {
+        id: 65,
+        name: 'RegistrationP',
+        component: RegistrationP,
+        option: ({route}) => ({
+          headerShown: false,
+          animation: 'none',
+        }),
+      },
     ];
 
     return (

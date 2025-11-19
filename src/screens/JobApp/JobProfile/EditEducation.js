@@ -9,7 +9,9 @@ import {
   Alert,
   Platform,
   Keyboard,
+  Modal,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import {Picker} from '@react-native-picker/picker';
 import {Button, RadioButton} from 'react-native-paper';
 import JobHeader from '../../../components/Job/JobHeader';
@@ -20,6 +22,7 @@ import {useFocusEffect} from '@react-navigation/native';
 import SimpleHeader from '../../../components/SimpleHeader';
 import {KeyboardScroll} from '../../../component';
 import {showToastMessage} from '../../../utils/Toast';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function EditEducation({navigation, route}) {
   const {
@@ -29,137 +32,198 @@ export default function EditEducation({navigation, route}) {
     addNew,
     experience,
     profileJobseekerData,
+    jobseekerId,
   } = route.params;
+  console.log('jobSeekerData=====', jobSeekerData);
+  console.log('data=====', data);
+  console.log('profileJobseekerData=====', profileJobseekerData);
+  console.log('addNew=====', addNew);
 
+  // data===== {educationLevel: "Bachelor's", collegeName: 'abc University', degree: 'G.Tech', specialization: '', educationType: '', startDate: '', endDate: '', yearOfCompletion: '2017'}
+  const colorScheme = useColorScheme();
+  const textColor = colorScheme === 'dark' ? '#000' : '#000';
+  const isDarkMode = useColorScheme() === 'dark';
+
+  const [graduationDegrees, setGraduationDegrees] = useState([]);
+  const [postGraduationDegrees, setPostGraduationDegrees] = useState([]);
+  const [diplomaDegrees, setDiplomaDegrees] = useState([]);
+  const [loadingDegrees, setLoadingDegrees] = useState(false);
+  const [showDegreeModal, setShowDegreeModal] = useState(false);
+  const [degreeSearchText, setDegreeSearchText] = useState('');
+  const [filteredDegrees, setFilteredDegrees] = useState([]);
+
+  // Helper function to map education level from API format to UI format
+  const mapEducationLevel = level => {
+    if (!level) return '';
+    // Map API formats to UI formats
+    if (
+      level.includes("Bachelor's") ||
+      level === 'Bachelor' ||
+      level === 'Graduate'
+    ) {
+      return 'Graduate';
+    }
+    if (
+      level.includes("Master's") ||
+      level === 'Master' ||
+      level === 'Postgraduate'
+    ) {
+      return 'Postgraduate';
+    }
+    // Return as-is for other levels
+    return level;
+  };
+
+  // Helper function to map education level from UI format back to API format
+  const mapEducationLevelToAPI = level => {
+    if (!level) return '';
+    // Map UI formats back to API formats
+    if (level === 'Graduate') {
+      return "Bachelor's";
+    }
+    if (level === 'Postgraduate') {
+      return "Master's";
+    }
+    // Return as-is for other levels
+    return level;
+  };
+
+  // Initialize educationData state with all fields
+  const getInitialEducationData = () => {
+    if (addNew) {
+      return {
+        educationLevel: '',
+        collegeName: '',
+        degree: '',
+        specialization: '',
+        educationType: '',
+        startDate: '',
+        endDate: '',
+        yearOfCompletion: '',
+      };
+    }
+
+    if (data && typeof data === 'object') {
+      // Map education level from API format to UI format
+      const mappedLevel = mapEducationLevel(data.educationLevel);
+
+      return {
+        educationLevel: mappedLevel || data.educationLevel || '',
+        collegeName: data.collegeName || '',
+        degree: data.degree || '',
+        specialization: data.specialization || '',
+        educationType: data.educationType || '',
+        startDate: data.startDate || '',
+        endDate: data.endDate || '',
+        yearOfCompletion: data.yearOfCompletion || '',
+      };
+    }
+
+    return {
+      educationLevel: '',
+      collegeName: '',
+      degree: '',
+      specialization: '',
+      educationType: '',
+      startDate: '',
+      endDate: '',
+      yearOfCompletion: '',
+    };
+  };
+
+  const [educationData, setEducationData] = useState(getInitialEducationData());
+
+  // Prefill data when screen is focused or data changes
   useFocusEffect(
     useCallback(() => {
-      // If addNew is true, don't prefill data - use empty form
       if (addNew) {
         setEducationData({
           educationLevel: '',
           collegeName: '',
           degree: '',
+          specialization: '',
+          educationType: '',
+          startDate: '',
+          endDate: '',
           yearOfCompletion: '',
         });
         return;
       }
 
-      // Otherwise, prefill with existing data
-      if (Array.isArray(data) && index != null && index < data.length) {
-        setEducationData(data[index]);
-      } else if (data && typeof data === 'object') {
-        setEducationData(data);
-      } else {
-        // Reset to empty if no data
+      // Prefill with data from params
+      if (data && typeof data === 'object') {
+        const mappedLevel = mapEducationLevel(data.educationLevel);
         setEducationData({
-          educationLevel: '',
-          collegeName: '',
-          degree: '',
-          yearOfCompletion: '',
+          educationLevel: mappedLevel || data.educationLevel || '',
+          collegeName: data.collegeName || '',
+          degree: data.degree || '',
+          specialization: data.specialization || '',
+          educationType: data.educationType || '',
+          startDate: data.startDate || '',
+          endDate: data.endDate || '',
+          yearOfCompletion: data.yearOfCompletion || '',
+        });
+      } else if (Array.isArray(data) && index != null && index < data.length) {
+        const item = data[index];
+        const mappedLevel = mapEducationLevel(item.educationLevel);
+        setEducationData({
+          educationLevel: mappedLevel || item.educationLevel || '',
+          collegeName: item.collegeName || '',
+          degree: item.degree || '',
+          specialization: item.specialization || '',
+          educationType: item.educationType || '',
+          startDate: item.startDate || '',
+          endDate: item.endDate || '',
+          yearOfCompletion: item.yearOfCompletion || '',
         });
       }
     }, [data, index, addNew]),
   );
 
-  const fetchedData = {
-    educationLevel: '',
-    collegeName: '',
-    degree: '',
-    specialization: '',
-    educationType: '',
-    startDate: '',
-    endDate: '',
-
-    // new
-    yearOfCompletion: '',
-  };
-
-  // Initialize with empty data if addNew is true, otherwise use provided data
-  const [educationData, setEducationData] = useState(
-    addNew
-      ? {
-          educationLevel: '',
-          collegeName: '',
-          degree: '',
-          yearOfCompletion: '',
-        }
-      : data || {
-          educationLevel: '',
-          collegeName: '',
-          degree: '',
-          yearOfCompletion: '',
-        },
-  );
-
-  const colorScheme = useColorScheme();
-  const textColor = colorScheme === 'dark' ? '#000' : '#000';
-  const isDarkMode = useColorScheme() === 'dark';
-  const [openYear, setOpenYear] = useState(false);
-
-  function parseIfArrayString(value) {
-    if (value === '') {
-      return [];
-    }
-
-    if (
-      typeof value === 'string' &&
-      value.trim().startsWith('[') &&
-      value.trim().endsWith(']')
-    ) {
-      try {
-        const parsed = JSON.parse(value);
-        if (Array.isArray(parsed)) {
-          return parsed;
-        }
-      } catch (err) {
-        // console.warn('Invalid JSON array string:', value);
-      }
-    }
-
-    return value;
-  }
-
-  const graduationDegrees = [
-    {label: 'B.A.', value: 'B.A.'},
-    {label: 'B.Sc.', value: 'B.Sc.'},
-    {label: 'B.Com.', value: 'B.Com.'},
-    {label: 'BBA', value: 'BBA'},
-    {label: 'BCA', value: 'BCA'},
-    {label: 'B.Tech', value: 'B.Tech'},
-    {label: 'B.E.', value: 'B.E.'},
-    {label: 'LLB', value: 'LLB'},
-    {label: 'B.Ed.', value: 'B.Ed.'},
-    {label: 'BFA', value: 'BFA'},
-    {label: 'BPT', value: 'BPT'},
-    {label: 'BHM', value: 'BHM'},
-    {label: 'Other', value: 'Other'},
-  ];
-
-  const postGraduationDegrees = [
-    {label: 'M.A.', value: 'M.A.'},
-    {label: 'M.Sc.', value: 'M.Sc.'},
-    {label: 'M.Com.', value: 'M.Com.'},
-    {label: 'MBA', value: 'MBA'},
-    {label: 'MCA', value: 'MCA'},
-    {label: 'M.Tech', value: 'M.Tech'},
-    {label: 'M.E.', value: 'M.E.'},
-    {label: 'LLM', value: 'LLM'},
-    {label: 'M.Ed.', value: 'M.Ed.'},
-    {label: 'MPA', value: 'MPA'},
-    {label: 'MFA', value: 'MFA'},
-    {label: 'Other', value: 'Other'},
-  ];
-
-  const showDegreePicker = ['Graduate', 'Post Graduate'].includes(
+  // Determine if degree picker should be shown
+  const showDegreePicker = ['Graduate', 'Postgraduate', 'DIPLOMA'].includes(
     educationData.educationLevel,
   );
 
+  // Get degree options based on education level
   const degreeOptions =
     educationData.educationLevel === 'Graduate'
       ? graduationDegrees
-      : educationData.educationLevel === 'Post Graduate'
+      : educationData.educationLevel === 'Postgraduate'
         ? postGraduationDegrees
-        : [];
+        : educationData.educationLevel === 'DIPLOMA'
+          ? diplomaDegrees
+          : [];
+  console.log('graduationDegrees-=d-----==-=-=-=', graduationDegrees);
+  console.log('educationData-=d-----==-=-=-=', educationData);
+  console.log('degreeOptions-x=-----==-=-=-=', degreeOptions);
+  // Handler functions for degree modal
+  const handleDegreeModalOpen = () => {
+    setDegreeSearchText('');
+    setFilteredDegrees(degreeOptions);
+    setShowDegreeModal(true);
+  };
+
+  const handleDegreeModalSearch = text => {
+    setDegreeSearchText(text);
+    if (!text.trim()) {
+      setFilteredDegrees(degreeOptions);
+    } else {
+      const filtered = degreeOptions.filter(
+        deg =>
+          deg.label.toLowerCase().includes(text.toLowerCase()) ||
+          deg.value.toLowerCase().includes(text.toLowerCase()),
+      );
+      setFilteredDegrees(filtered);
+    }
+  };
+
+  const handleDegreeModalSelect = degree => {
+    setEducationData({...educationData, degree: degree.value});
+    setShowDegreeModal(false);
+    setDegreeSearchText('');
+  };
+
   useEffect(() => {
     if (Platform.OS === 'android') {
       const keyboardDidShowListener = Keyboard.addListener(
@@ -181,80 +245,183 @@ export default function EditEducation({navigation, route}) {
       };
     }
   }, []);
-  const handleSubmit = async () => {
-    if (
-      educationData.educationLevel === '' ||
-      educationData.collegeName === '' ||
-      // educationData.degree === '' ||
-      educationData.yearOfCompletion === ''
-    ) {
-      showToastMessage('Please fill all the fields', 'danger');
-      return;
+
+  // Fetch degrees from API
+  useEffect(() => {
+    fetchDegrees();
+  }, []);
+
+  // Update filteredDegrees when degreeOptions changes
+  useEffect(() => {
+    if (showDegreeModal) {
+      setFilteredDegrees(degreeOptions);
     }
-    // jobSeekerData is the old education array passed from parent
-    // Parse it to get the existing education entries
-    let oldEducationArray = [];
-    if (Array.isArray(jobSeekerData)) {
-      // If jobSeekerData is directly an array (education array)
-      oldEducationArray = jobSeekerData;
-    } else if (jobSeekerData && jobSeekerData.education) {
-      // If jobSeekerData is an object with education property
-      oldEducationArray = parseIfArrayString(jobSeekerData.education);
-    } else if (profileJobseekerData && profileJobseekerData.education) {
-      // Fallback: get from profileJobseekerData
-      oldEducationArray = parseIfArrayString(profileJobseekerData.education);
-    }
+  }, [degreeOptions, showDegreeModal]);
 
-    const educationArray = Array.isArray(oldEducationArray)
-      ? oldEducationArray
-      : [];
-
-    // Merge old education with new education entry
-    const hasValidIndex =
-      index !== null && index !== undefined && !Number.isNaN(Number(index));
-    const updatedEducationData = hasValidIndex
-      ? educationArray.length > 0
-        ? educationArray.map((item, id) =>
-            id === Number(index) ? educationData : item,
-          )
-        : [educationData]
-      : [...educationArray, educationData];
-
-    // Parse experience array if it's a string
-    let experienceArray = [];
-    if (Array.isArray(experience)) {
-      experienceArray = experience;
-    } else if (typeof experience === 'string') {
-      experienceArray = parseIfArrayString(experience);
-    } else if (profileJobseekerData && profileJobseekerData.experience) {
-      experienceArray = parseIfArrayString(profileJobseekerData.experience);
-    }
-
-    // Build payload with full profile data, updated education, and experience
-    const payload = {
-      ...(profileJobseekerData || {}),
-      education: JSON.stringify(updatedEducationData),
-      experience: JSON.stringify(experienceArray),
-    };
-    console.log('payload-===--==-', payload);
+  const fetchDegrees = async () => {
     try {
-      const response = await fetch(
-        `https://jobipo.com/api/Agent/doupdatejobp`,
+      setLoadingDegrees(true);
+
+      // Fetch Graduation degrees (qualification=1)
+      const graduationFormData = new FormData();
+      graduationFormData.append('qualification', '1');
+      const graduationResponse = await fetch(
+        'https://jobipo.com/api/v3/fetch-degree',
         {
           method: 'POST',
-          body: JSON.stringify(payload),
+          headers: {
+            Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          },
+          body: graduationFormData,
         },
       );
-      const res = await response.json();
-      if (res) {
-        showToastMessage('Details updated successfully', 'success');
-        navigation.goBack();
+      const graduationResult = await graduationResponse.json();
+      console.log('graduationResult-==--=-=-', graduationResult);
+      if (graduationResult?.status == 1) {
+        const parsed = graduationResult?.data;
+        const formatted = Array.isArray(parsed)
+          ? parsed.map(item => ({
+              label: item.degree || item.name || item,
+              value: item.degree || item.name || item,
+            }))
+          : [];
+        console.log('formatted-=d-----==-=-=-=', formatted);
+        setGraduationDegrees(formatted);
       }
-    } catch (err) {
-      showToastMessage('Error updating details');
+
+      // Fetch Post Graduation degrees (qualification=2)
+      const postGraduationFormData = new FormData();
+      postGraduationFormData.append('qualification', '2');
+      const postGraduationResponse = await fetch(
+        'https://jobipo.com/api/v3/fetch-degree',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          },
+          body: postGraduationFormData,
+        },
+      );
+      const postGraduationResult = await postGraduationResponse.json();
+      if (postGraduationResult?.status == 1) {
+        const parsed = postGraduationResult?.data;
+        const formatted = Array.isArray(parsed)
+          ? parsed.map(item => ({
+              label: item.degree || item.name || item,
+              value: item.degree || item.name || item,
+            }))
+          : [];
+        setPostGraduationDegrees(formatted);
+      }
+
+      // Fetch Diploma degrees (qualification=3)
+      const diplomaFormData = new FormData();
+      diplomaFormData.append('qualification', '3');
+      const diplomaResponse = await fetch(
+        'https://jobipo.com/api/v3/fetch-degree',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          },
+          body: diplomaFormData,
+        },
+      );
+      const diplomaResult = await diplomaResponse.json();
+      if (diplomaResult?.status == 1) {
+        const parsed = diplomaResult?.data;
+        const formatted = Array.isArray(parsed)
+          ? parsed.map(item => ({
+              label: item.degree || item.name || item,
+              value: item.degree || item.name || item,
+            }))
+          : [];
+        setDiplomaDegrees(formatted);
+      }
+    } catch (error) {
+      console.error('Error fetching degrees:', error);
+      // Fallback to empty arrays on error
+      setGraduationDegrees([]);
+      setPostGraduationDegrees([]);
+      setDiplomaDegrees([]);
+    } finally {
+      setLoadingDegrees(false);
     }
   };
 
+  const handleSubmitData = async () => {
+    try {
+      const userID = await AsyncStorage.getItem('UserID');
+
+      if (!userID) {
+        showToastMessage('User ID not found. Please log in again.', 'danger');
+        return;
+      }
+
+      // Validate required fields
+      if (!educationData.educationLevel) {
+        showToastMessage('Please select qualification level', 'danger');
+        return;
+      }
+      if (!educationData.collegeName?.trim()) {
+        showToastMessage('Please enter institute name', 'danger');
+        return;
+      }
+      if (showDegreePicker && !educationData.degree) {
+        showToastMessage('Please select course name', 'danger');
+        return;
+      }
+
+      // Map education level from UI format to API format
+      const apiEducationLevel = mapEducationLevelToAPI(
+        educationData.educationLevel,
+      );
+
+      const educationPayload = {
+        updateIndex: addNew ? jobSeekerData?.length : index != null ? index : 0,
+        educationLevel: apiEducationLevel,
+        collegeName: educationData.collegeName || '',
+        degree: educationData.degree || '',
+        specialization: educationData.specialization || '',
+        educationType: educationData.educationType || '',
+        startDate: educationData.startDate || '',
+        endDate: educationData.endDate || '',
+        yearOfCompletion: educationData.yearOfCompletion || '',
+      };
+
+      const submissionData = new FormData();
+      submissionData.append('userID', userID);
+      submissionData.append('jobseekerId', jobseekerId);
+      submissionData.append(
+        'education',
+        JSON.stringify(addNew ? [educationPayload] : [educationPayload]),
+      );
+
+      console.log('submissionDatasubmissionData', submissionData);
+      const res = await fetch(
+        'https://jobipo.com/api/v3/update-candidate-profile',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          },
+          body: submissionData,
+        },
+      );
+
+      const data = await res.json();
+      if (data?.success) {
+        showToastMessage('Education updated successfully', 'success');
+        navigation.goBack();
+      } else {
+        showToastMessage(data?.message || 'Something went wrong.', 'danger');
+      }
+      console.log('data-=-----==-=-=-=', data);
+    } catch (err) {
+      showToastMessage('Something went wrong. Please try again.', 'danger');
+    }
+  };
+  console.log('filteredDegrees-=-----==-=-=-=', filteredDegrees);
   return (
     <>
       <SimpleHeader title="Add Education" titleColor="#585858" />
@@ -267,11 +434,11 @@ export default function EditEducation({navigation, route}) {
           <Text style={styles.label}>Qualification</Text>
           <View style={styles.buttonGroup}>
             {[
-              ' 10th Below',
+              '10th Below',
               '10th',
               '12th',
               'Graduate',
-              'Post Graduate',
+              'Postgraduate',
               'ITI',
               'DIPLOMA',
             ].map(level => (
@@ -291,73 +458,28 @@ export default function EditEducation({navigation, route}) {
                     educationData.educationLevel === level &&
                       styles.buttonTextSelected,
                   ]}>
-                  {level}
+                  {level == 'Postgraduate' ? 'Post Graduate' : level}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* <Text style={styles.labelPicker}>Course Name</Text>
-          <View style={styles.pickerWrapper}> 
-            <Picker
-              selectedValue={educationData.degree}
-              onValueChange={(itemValue) =>
-                setEducationData({ ...educationData, degree: itemValue })
-              }
-            style={[styles.picker, { color: textColor }]}
-            >
-              <Picker.Item label="Select Degree" value="" />
-              <Picker.Item label="B.A." value="B.A." />
-                <Picker.Item label="B.Sc." value="B.Sc." />
-                <Picker.Item label="B.Com." value="B.Com." />
-                <Picker.Item label="BBA" value="BBA" />
-                <Picker.Item label="BCA" value="BCA" />
-                <Picker.Item label="B.Tech" value="B.Tech" />
-                <Picker.Item label="B.E." value="B.E." />
-                <Picker.Item label="LLB" value="LLB" />
-                <Picker.Item label="B.Ed." value="B.Ed." />
-                <Picker.Item label="BFA" value="BFA" />
-                <Picker.Item label="BPT" value="BPT" />
-                <Picker.Item label="BHM" value="BHM" />
-
-                <Picker.Item label="M.A." value="M.A." />
-                <Picker.Item label="M.Sc." value="M.Sc." />
-                <Picker.Item label="M.Com." value="M.Com." />
-                <Picker.Item label="MBA" value="MBA" />
-                <Picker.Item label="MCA" value="MCA" />
-                <Picker.Item label="M.Tech" value="M.Tech" />
-                <Picker.Item label="M.E." value="M.E." />
-                <Picker.Item label="LLM" value="LLM" />
-                <Picker.Item label="M.Ed." value="M.Ed." />
-                <Picker.Item label="MPA" value="MPA" />
-                <Picker.Item label="MFA" value="MFA" />
-
-              <Picker.Item label="Other" value="Other" />
-            </Picker>
-          </View> */}
           {showDegreePicker ? (
             <View>
               <Text style={styles.labelPicker}>Course Name</Text>
-              <View style={styles.pickerWrapper}>
-                <Picker
-                  enabled={showDegreePicker}
-                  selectedValue={showDegreePicker ? educationData.degree : ''}
-                  onValueChange={itemValue => {
-                    if (showDegreePicker) {
-                      setEducationData({...educationData, degree: itemValue});
-                    }
-                  }}
-                  style={[styles.picker, {color: textColor}]}>
-                  <Picker.Item label="Select Degree" value="" />
-                  {degreeOptions.map(deg => (
-                    <Picker.Item
-                      key={deg.value}
-                      label={deg.label}
-                      value={deg.value}
-                    />
-                  ))}
-                </Picker>
-              </View>
+              <TouchableOpacity
+                style={styles.degreeInput}
+                onPress={handleDegreeModalOpen}>
+                <Text
+                  style={[
+                    educationData.degree
+                      ? styles.inputText
+                      : styles.placeholderText,
+                  ]}>
+                  {educationData.degree || 'Select Degree'}
+                </Text>
+                <Icon name="arrow-drop-down" size={24} color="#535353" />
+              </TouchableOpacity>
             </View>
           ) : (
             <View style={{height: 20}} />
@@ -390,82 +512,82 @@ export default function EditEducation({navigation, route}) {
             }
           />
 
-          {/* <Text style={styles.labelPicker}>Specialization</Text>
-          <View style={styles.pickerWrapper}>
-            <Picker
-              selectedValue={educationData.specialization}
-              onValueChange={(itemValue) =>
-                setEducationData({ ...educationData, specialization: itemValue })
-              }
-              style={[styles.picker, { color: textColor }]}
-              >
-              <Picker.Item label="Select Specialization" value="" />
-              <Picker.Item label="Computer Science" value="Computer Science" />
-              <Picker.Item label="Electronics" value="Electronics" />
-              <Picker.Item label="Mechanical" value="Mechanical" />
-              <Picker.Item label="Other" value="Other" />
-            </Picker>
-          </View> */}
-
-          {/* <Text style={styles.label}>Education Type</Text>
-          <RadioButton.Group
-            onValueChange={(newValue) =>
-              setEducationData({ ...educationData, educationType: newValue })
-            }
-            value={educationData.educationType}
-          >
-            <View style={styles.radioGroup}>
-              {["Full-time", "Part-time", "Correspondence"].map((type) => (
-                <View key={type} style={styles.radioOption}>
-                  <RadioButton value={type} color="#0d4574" />
-                  <Text>{type}</Text>
-                </View>
-              ))}
-            </View>
-          </RadioButton.Group> */}
-
-          {/* <Text style={styles.label}>Start Date</Text>
-          <DateTimePicker
-            style={styles.input}
-            value={educationData.startDate}
-            setValue={
-              (date) => setEducationData({ ...educationData, startDate: date })
-            }
-            placeholder="Select Start Date"
-          /> */}
-          {/* <TextInput
-            style={styles.input}
-            placeholder="Enter Start Date (YYYY-MM-DD)"
-            value={educationData.startDate}
-            onChangeText={(text) =>
-              setEducationData({ ...educationData, startDate: text })
-            }
-          /> */}
-
-          {/* <Text style={styles.label}>End Date</Text>
-          <DateTimePicker
-            style={styles.input}
-            value={educationData.endDate}
-            setValue={
-              (date) => setEducationData({ ...educationData, endDate: date })
-            }
-            placeholder="Select End Date"
-          /> */}
-          {/* <TextInput
-            style={styles.input}
-            placeholder="Enter End Date (YYYY-MM-DD)"
-            value={educationData.endDate}
-            onChangeText={(text) =>
-              setEducationData({ ...educationData, endDate: text })
-            }
-          /> */}
           <View style={styles.saveContainer}>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSubmit}>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleSubmitData}>
               <Text style={styles.saveButtonText}>Save</Text>
             </TouchableOpacity>
           </View>
         </View>
       </KeyboardScroll>
+
+      {/* Degree Selection Modal */}
+      <Modal
+        visible={showDegreeModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDegreeModal(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDegreeModal(false)}>
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={e => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Degree</Text>
+              <TouchableOpacity onPress={() => setShowDegreeModal(false)}>
+                <Icon name="close" size={24} color="#535353" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalSearchContainer}>
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Search Degree"
+                placeholderTextColor="#BABFC7"
+                value={degreeSearchText}
+                onChangeText={handleDegreeModalSearch}
+                autoFocus={true}
+              />
+              <Icon name="search" size={24} color="#535353" />
+            </View>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              style={styles.modalOptions}>
+              {filteredDegrees.length > 0 ? (
+                filteredDegrees.map((deg, index) => (
+                  <TouchableOpacity
+                    key={deg.value || index}
+                    style={[
+                      styles.modalOption,
+                      educationData.degree === deg.value &&
+                        styles.modalOptionSelected,
+                    ]}
+                    onPress={() => handleDegreeModalSelect(deg)}>
+                    <Text
+                      style={[
+                        styles.modalOptionText,
+                        educationData.degree === deg.value &&
+                          styles.modalOptionTextSelected,
+                      ]}>
+                      {deg.label}
+                    </Text>
+                    {educationData.degree === deg.value && (
+                      <Icon name="check" size={20} color="#FF8D53" />
+                    )}
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View style={styles.noResultsContainer}>
+                  <Text style={styles.noResultsText}>No degrees found</Text>
+                </View>
+              )}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </>
   );
 }
@@ -488,16 +610,96 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {backgroundColor: '#ffffff', borderRadius: 8, padding: 10},
-  pickerWrapper: {
-    backgroundColor: '#ffffff',
+  degreeInput: {
+    padding: 12,
     borderRadius: 8,
-    height: 43,
-    width: '100%',
-    overflow: 'hidden',
-    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: 10,
   },
-  picker: {height: 50, backgroundColor: '#fff'},
+  inputText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+  placeholderText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#BABFC7',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    width: '90%',
+    maxHeight: '80%',
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#535353',
+  },
+  modalSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F4FD',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  modalSearchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#333',
+  },
+  modalOptions: {
+    maxHeight: 400,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  modalOptionSelected: {
+    backgroundColor: '#FFF5F0',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  modalOptionTextSelected: {
+    color: '#FF8D53',
+    fontWeight: '500',
+  },
+  noResultsContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  noResultsText: {
+    fontSize: 16,
+    color: '#999',
+  },
   buttonGroup: {
     flexDirection: 'row',
     flexWrap: 'wrap',

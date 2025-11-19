@@ -12,7 +12,9 @@ import {
   Modal,
   Image,
   Platform,
+  Dimensions,
 } from 'react-native';
+import Pdf from 'react-native-pdf';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useFocusEffect} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -35,6 +37,7 @@ import {permissionConfirm} from '../../utils/alertController';
 import {AUTH_TOKEN} from '../../appRedux/apis/commonValue';
 import PlacesAutocomplete from '../../components/PlacesAutocomplete';
 import {handleSetRoot} from '../../navigation/navigationService';
+import RNFS from '@exodus/react-native-fs';
 
 const RegistrationS = ({navigation, route}) => {
   const {signIn} = useContext(AuthContext);
@@ -53,6 +56,11 @@ const RegistrationS = ({navigation, route}) => {
   const [focusedInput, setFocusedInput] = useState(null);
   const [resumeFile, setResumeFile] = useState(null);
   const [resumeFileName, setResumeFileName] = useState('');
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [isImageFile, setIsImageFile] = useState(false);
+  const [isPdfFile, setIsPdfFile] = useState(false);
+  const [pdfLoadError, setPdfLoadError] = useState(false);
+  const [resumeFileUri, setResumeFileUri] = useState(null);
   const [showWorkExperienceForm, setShowWorkExperienceForm] = useState(false);
   const [workExperiences, setWorkExperiences] = useState([
     {
@@ -63,6 +71,9 @@ const RegistrationS = ({navigation, route}) => {
       workingDuration: '',
     },
   ]);
+  const [preferredJobTitle, setPreferredJobTitle] = useState('');
+  const [filteredTitles, setFilteredTitles] = useState([]);
+
   const [focusedWorkExpInput, setFocusedWorkExpInput] = useState(null);
   const [locationSelected, setLocationSelected] = useState({});
   const [selectedSkills, setSelectedSkills] = useState(() => {
@@ -74,6 +85,44 @@ const RegistrationS = ({navigation, route}) => {
       return [];
     }
   });
+  const [jobTitles, setJobTitles] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showIndustryModal, setShowIndustryModal] = useState(false);
+  const [industrySearchText, setIndustrySearchText] = useState('');
+  const [filteredIndustries, setFilteredIndustries] = useState([]);
+  const [showJobTitleModal, setShowJobTitleModal] = useState(false);
+  const [jobTitleSearchText, setJobTitleSearchText] = useState('');
+  const [filteredJobTitles, setFilteredJobTitles] = useState([]);
+
+  // Industry list
+  const industries = [
+    'IT & Software',
+    'Education & Training',
+    'Transportation',
+    'Facility Management',
+    'Real Estate & Property',
+    'Insurance & Stock Market',
+    'E-Commerce Management',
+    'Hospitality & Tourism',
+    'Healthcare & Support',
+    'BPO & KPO',
+    'Banking, Financial Services & Insurance',
+    'E-commerce & Retail',
+    'Healthcare & Pharmaceuticals',
+    'Engineering & Manufacturing',
+    'Sales & Marketing',
+    'Telecom',
+    'Automobile',
+    'Hospitality & Travel',
+    'Logistics & Supply Chain',
+    'Construction & Real Estate',
+    'Legal & Compliance',
+    'Media, Advertising & Entertainment',
+    'Agriculture & Rural Development',
+    'Human Resources & Recruitment',
+    'Design & Creative',
+    'Others',
+  ];
 
   // const [selectedSkills, setSelectedSkills] = useState(() => {
   //   try {
@@ -104,6 +153,7 @@ const RegistrationS = ({navigation, route}) => {
       }
     };
     fetchUserId();
+    fetchJobTitles();
   }, []);
 
   // // console.log(data);
@@ -173,7 +223,28 @@ const RegistrationS = ({navigation, route}) => {
       console.error('Permission method error:', err);
     }
   };
+  const fetchJobTitles = async () => {
+    try {
+      const response = await fetch(
+        'https://jobipo.com/api/v3/fetch-job-titles',
+        {
+          method: 'GET',
+          headers: {
+            Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          },
+        },
+      );
 
+      const result = await response.json();
+
+      if (result?.status === 1 && result?.msg) {
+        const parsed = JSON.parse(result.msg);
+        setJobTitles(parsed);
+      }
+    } catch (error) {
+      // Silently handle error
+    }
+  };
   const checkMediaPermissions = async (type = 'gallery', cb) => {
     try {
       // Determine the appropriate permission based on platform and Android version
@@ -245,7 +316,7 @@ const RegistrationS = ({navigation, route}) => {
     try {
       const res = await pick({
         mode: 'open',
-        type: [types.pdf, types.allFiles],
+        type: [types.pdf, types.images],
         allowMultiSelection: false,
       });
 
@@ -262,15 +333,119 @@ const RegistrationS = ({navigation, route}) => {
         // Validate file type
         const fileName = file.name || '';
         const fileExtension = fileName.split('.').pop()?.toLowerCase();
-        const allowedExtensions = ['pdf', 'doc', 'docx'];
+        const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
 
         if (!allowedExtensions.includes(fileExtension)) {
           showToastMessage(
-            'Please select PDF, Doc or Docx files only',
+            'Please select PDF, JPG, JPEG or PNG files only',
             'danger',
           );
           return;
         }
+
+        // Check if it's an image file
+        const imageExtensions = ['jpg', 'jpeg', 'png'];
+        const isImage = imageExtensions.includes(fileExtension);
+        setIsImageFile(isImage);
+        // Check if it's a PDF file (for preview purposes)
+        const isPdf = fileExtension === 'pdf';
+        setIsPdfFile(isPdf);
+
+        // Get file URI for preview
+        let fileUri = file.fileCopyUri || file.uri || file.path;
+        const fileType =
+          file.type ||
+          file.mime ||
+          (isImage ? 'image/jpeg' : 'application/pdf');
+
+        console.log('Original file URI:', fileUri);
+        console.log('fileCopyUri:', file.fileCopyUri);
+        console.log('file.uri:', file.uri);
+
+        // Handle Android content URIs - convert to file URI for PDF/image preview
+        // PDF component requires file:// URIs, not content:// URIs
+        if (Platform.OS === 'android' && fileUri) {
+          // If we already have a file:// URI, use it directly
+          if (fileUri.startsWith('file://')) {
+            console.log('Using existing file:// URI:', fileUri);
+          } else if (fileUri.startsWith('content://')) {
+            // Need to convert content:// URI to file:// URI
+            try {
+              console.log('Converting content:// URI to file:// URI');
+              // Create a temporary file path
+              const tempFileName = `resume_${Date.now()}.${fileExtension}`;
+              const tempFilePath = `${RNFS.CachesDirectoryPath}/${tempFileName}`;
+
+              // Read file from content URI and write to temporary location
+              // Use base64 encoding for binary files like PDFs and images
+              const fileData = await RNFS.readFile(fileUri, 'base64');
+              await RNFS.writeFile(tempFilePath, fileData, 'base64');
+
+              // Verify file was written
+              const fileExists = await RNFS.exists(tempFilePath);
+              if (!fileExists) {
+                throw new Error('File was not written successfully');
+              }
+
+              // Use the file:// URI for preview
+              fileUri = `file://${tempFilePath}`;
+              console.log(
+                'Successfully converted content URI to file URI:',
+                fileUri,
+              );
+            } catch (copyError) {
+              console.error('Error copying file from content URI:', copyError);
+              // Try fileCopyUri as fallback if it's a file URI
+              if (file.fileCopyUri && file.fileCopyUri.startsWith('file://')) {
+                fileUri = file.fileCopyUri;
+                console.log('Using fileCopyUri as fallback:', fileUri);
+              } else {
+                // If conversion fails, show error and don't proceed
+                console.error(
+                  'Failed to convert content URI and no valid fallback available',
+                );
+                showToastMessage(
+                  'Error processing file. Please try selecting the file again.',
+                  'danger',
+                );
+                setPdfLoadError(true);
+                return;
+              }
+            }
+          } else {
+            // Unknown URI format - try to use fileCopyUri if available
+            console.warn('Unknown URI format:', fileUri);
+            if (file.fileCopyUri && file.fileCopyUri.startsWith('file://')) {
+              fileUri = file.fileCopyUri;
+              console.log('Using fileCopyUri for unknown URI format:', fileUri);
+            } else {
+              showToastMessage(
+                'Invalid file format. Please try selecting the file again.',
+                'danger',
+              );
+              setPdfLoadError(true);
+              return;
+            }
+          }
+        }
+
+        // Ensure file URI is valid before setting
+        if (
+          !fileUri ||
+          (!fileUri.startsWith('file://') &&
+            !fileUri.startsWith('http') &&
+            !fileUri.startsWith('https'))
+        ) {
+          showToastMessage(
+            'Invalid file URI. Please try selecting the file again.',
+            'danger',
+          );
+          setPdfLoadError(true);
+          return;
+        }
+
+        setResumeFileUri(fileUri);
+        setPdfLoadError(false);
 
         setResumeFile(file);
         setResumeFileName(fileName);
@@ -278,23 +453,35 @@ const RegistrationS = ({navigation, route}) => {
       }
     } catch (err) {
       if (err?.message !== 'User canceled document picker') {
-        showToastMessage('Error selecting file', 'danger');
+        // showToastMessage('Error selecting file', 'danger');
       }
     }
   };
   const handleSelectResume = async () => {
     methodForPermission('gallery');
   };
-
+  const handleSuggestionSelect = item => {
+    setPreferredJobTitle(item.jobTitle);
+    setShowSuggestions(false);
+    // Also update formData to keep it in sync
+    setFormData(prev => ({
+      ...prev,
+      jobTitle: item.jobTitle,
+    }));
+  };
   const handleRemoveResume = () => {
     setResumeFile(null);
     setResumeFileName('');
+    setIsImageFile(false);
+    setIsPdfFile(false);
+    setResumeFileUri(null);
+    setPdfLoadError(false);
   };
   const handleSubmit = async () => {
     if (!experience) {
       showToastMessage('Please select experience', 'danger');
       return;
-    } else if (!formData?.jobTitle) {
+    } else if (!preferredJobTitle || preferredJobTitle.trim() === '') {
       showToastMessage('Please enter job title', 'danger');
       return;
     } else if (!formData?.preferred_job_industry) {
@@ -313,24 +500,91 @@ const RegistrationS = ({navigation, route}) => {
       const form = new FormData();
 
       // Add text fields according to API format
-      form.append('userId', userId || storedUserId || '');
-      form.append('jobseekerId', jobseekerId ? jobseekerId : '');
+      form.append('userId', userId || storedUserId || 275618);
+      form.append('jobseekerId', jobseekerId ? jobseekerId : 136503);
       form.append('totalExperience', experience);
       form.append('preferredJobIndustry', formData.preferred_job_industry);
-      form.append('jobTitle', data?.jobTitle || formData?.jobTitle || '');
+      form.append(
+        'jobTitle',
+        preferredJobTitle || data?.jobTitle || formData?.jobTitle || '',
+      );
       form.append('current_salary', currentSalary || '');
 
       // Add resume file if selected
       if (resumeFile) {
-        const fileUri =
-          resumeFile.uri || resumeFile.fileCopyUri || resumeFile.path;
-        const fileName = resumeFileName || resumeFile.name || 'resume.pdf';
-        const fileType = resumeFile.type || 'application/pdf';
+        // Use the resumeFileUri which is already converted to file:// URI
+        let fileUri =
+          resumeFileUri ||
+          resumeFile.uri ||
+          resumeFile.fileCopyUri ||
+          resumeFile.path;
+
+        // Get file extension from original file name or determine from file type
+        let fileExtension = '';
+        const originalFileName = resumeFileName || resumeFile.name || '';
+        if (originalFileName) {
+          fileExtension =
+            originalFileName.split('.').pop()?.toLowerCase() || '';
+        }
+
+        // Determine correct MIME type and extension
+        let fileType = resumeFile.type || resumeFile.mime;
+
+        // If no file extension detected, use isImageFile state to determine
+        if (!fileExtension && isImageFile) {
+          fileExtension = 'jpeg'; // Default to jpeg for images
+        } else if (!fileExtension && isPdfFile) {
+          fileExtension = 'pdf';
+        }
+
+        if (!fileType) {
+          if (fileExtension === 'jpg' || fileExtension === 'jpeg') {
+            fileType = 'image/jpeg';
+            fileExtension = 'jpeg'; // Use .jpeg for JPEG files
+          } else if (fileExtension === 'png') {
+            fileType = 'image/png';
+          } else if (fileExtension === 'pdf') {
+            fileType = 'application/pdf';
+          } else {
+            // Fallback based on isImageFile state
+            if (isImageFile) {
+              fileType = 'image/jpeg';
+              fileExtension = 'jpeg';
+            } else {
+              fileType = 'application/pdf';
+              fileExtension = 'pdf';
+            }
+          }
+        } else {
+          // If we have MIME type, determine extension from it
+          if (fileType === 'image/jpeg' || fileType === 'image/jpg') {
+            fileExtension = 'jpeg';
+            fileType = 'image/jpeg'; // Normalize to image/jpeg
+          } else if (fileType === 'image/png') {
+            fileExtension = 'png';
+          } else if (fileType === 'application/pdf') {
+            fileExtension = 'pdf';
+          }
+        }
+
+        // Generate filename as timestamp with correct extension
+        const timestamp = Date.now();
+        const fileName = `${timestamp}.${fileExtension}`;
+
+        console.log('CV Upload Debug:', {
+          fileUri,
+          fileName,
+          fileType,
+          fileExtension,
+          isImageFile,
+          isPdfFile,
+          originalFileName,
+        });
 
         form.append('cv', {
           uri: fileUri,
-          type: fileType,
           name: fileName,
+          type: fileType,
         });
       } else {
         // Append empty file field if no resume selected
@@ -361,17 +615,20 @@ const RegistrationS = ({navigation, route}) => {
       //   'Content-Type': 'application/json',
       //   Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
       // },
-      const rawText = await response.text();
-      const jsonStart = rawText.indexOf('{');
-      const jsonEnd = rawText.lastIndexOf('}');
-      const jsonString = rawText.substring(jsonStart, jsonEnd + 1);
-      const res = JSON.parse(jsonString);
+      const data = await response.json();
+      console.log('data-----', data);
+      if (data && data?.success) {
+        showToastMessage(data?.message, 'success');
 
-      console.log('res submit-----', res);
-      if (res && res?.success) {
-        showToastMessage(res?.message, 'success');
+        console.log('data--1-1---dd--', data);
+        let username = await AsyncStorage.getItem('username');
+        console.log('username-=-=-=-=-', username);
+        let Token = await AsyncStorage.getItem('Token');
+        console.log('Token-=-=-=-=-', Token);
         if (resumeFile) {
           setShowWorkExperienceForm(true);
+        } else {
+          await signIn(String(Token), username || data?.userData?.fullName);
         }
       }
       // if (res && res.type === 'success') {
@@ -495,7 +752,7 @@ const RegistrationS = ({navigation, route}) => {
 
       // Transform workExperiences to match the expected API format
       const experiences = workExperiences.map((exp, index) => ({
-        jobTitle: 'react native developer',
+        jobTitle: '',
         jobRole: exp.jobRole || '',
         companyName: exp.companyName || '',
         currentlyWorking: '',
@@ -517,8 +774,8 @@ const RegistrationS = ({navigation, route}) => {
 
       // Create the request payload with userId, jobseekerId, and experiences
       const requestPayload = {
-        userId: Number(userId || storedUserId || ''),
-        jobseekerId: Number(jobseekerId),
+        userId: Number(userId || storedUserId || 275618),
+        jobseekerId: Number(jobseekerId || 136503),
         experiences: experiences,
       };
       console.log('requestPayload', JSON.stringify(requestPayload));
@@ -613,19 +870,86 @@ const RegistrationS = ({navigation, route}) => {
       form.append('jobseekerId', jobseekerId ? jobseekerId : '');
       form.append('totalExperience', experience);
       form.append('preferredJobIndustry', formData.preferred_job_industry);
-      form.append('jobTitle', data?.jobTitle || formData?.jobTitle || '');
+      form.append(
+        'jobTitle',
+        preferredJobTitle || data?.jobTitle || formData?.jobTitle || '',
+      );
       form.append('current_salary', currentSalary || '');
 
       if (resumeFile) {
-        const fileUri =
-          resumeFile.uri || resumeFile.fileCopyUri || resumeFile.path;
-        const fileName = resumeFileName || resumeFile.name || 'resume.pdf';
-        const fileType = resumeFile.type || 'application/pdf';
+        // Use the resumeFileUri which is already converted to file:// URI
+        let fileUri =
+          resumeFileUri ||
+          resumeFile.uri ||
+          resumeFile.fileCopyUri ||
+          resumeFile.path;
+
+        // Get file extension from original file name or determine from file type
+        let fileExtension = '';
+        const originalFileName = resumeFileName || resumeFile.name || '';
+        if (originalFileName) {
+          fileExtension =
+            originalFileName.split('.').pop()?.toLowerCase() || '';
+        }
+
+        // Determine correct MIME type and extension
+        let fileType = resumeFile.type || resumeFile.mime;
+
+        // If no file extension detected, use isImageFile state to determine
+        if (!fileExtension && isImageFile) {
+          fileExtension = 'jpeg'; // Default to jpeg for images
+        } else if (!fileExtension && isPdfFile) {
+          fileExtension = 'pdf';
+        }
+
+        if (!fileType) {
+          if (fileExtension === 'jpg' || fileExtension === 'jpeg') {
+            fileType = 'image/jpeg';
+            fileExtension = 'jpeg'; // Use .jpeg for JPEG files
+          } else if (fileExtension === 'png') {
+            fileType = 'image/png';
+          } else if (fileExtension === 'pdf') {
+            fileType = 'application/pdf';
+          } else {
+            // Fallback based on isImageFile state
+            if (isImageFile) {
+              fileType = 'image/jpeg';
+              fileExtension = 'jpeg';
+            } else {
+              fileType = 'application/pdf';
+              fileExtension = 'pdf';
+            }
+          }
+        } else {
+          // If we have MIME type, determine extension from it
+          if (fileType === 'image/jpeg' || fileType === 'image/jpg') {
+            fileExtension = 'jpeg';
+            fileType = 'image/jpeg'; // Normalize to image/jpeg
+          } else if (fileType === 'image/png') {
+            fileExtension = 'png';
+          } else if (fileType === 'application/pdf') {
+            fileExtension = 'pdf';
+          }
+        }
+
+        // Generate filename as timestamp with correct extension
+        const timestamp = Date.now();
+        const fileName = `${timestamp}.${fileExtension}`;
+
+        console.log('CV Upload Debug (Skip):', {
+          fileUri,
+          fileName,
+          fileType,
+          fileExtension,
+          isImageFile,
+          isPdfFile,
+          originalFileName,
+        });
 
         form.append('cv', {
           uri: fileUri,
-          type: fileType,
           name: fileName,
+          type: fileType,
         });
       } else {
         form.append('cv', '');
@@ -695,7 +1019,83 @@ const RegistrationS = ({navigation, route}) => {
       showToastMessage('Failed to submit. Please try again later.', 'danger');
     }
   };
+  const handleJobChange = text => {
+    setPreferredJobTitle(text);
+    // Also update formData to keep it in sync
+    setFormData(prev => ({
+      ...prev,
+      jobTitle: text,
+    }));
 
+    if (text.length > 0) {
+      const filtered = jobTitles.filter(item =>
+        item?.jobTitle?.toLowerCase().includes(text.toLowerCase()),
+      );
+      setFilteredTitles(filtered);
+      // Show suggestions if there are filtered results
+      setShowSuggestions(filtered.length > 0);
+    } else {
+      setFilteredTitles([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  // Handler functions for job title modal
+  const handleJobTitleModalOpen = () => {
+    setJobTitleSearchText('');
+    setFilteredJobTitles(jobTitles);
+    setShowJobTitleModal(true);
+  };
+
+  const handleJobTitleModalSearch = text => {
+    setJobTitleSearchText(text);
+    if (!text.trim()) {
+      setFilteredJobTitles(jobTitles);
+    } else {
+      const filtered = jobTitles.filter(item =>
+        item?.jobTitle?.toLowerCase().includes(text.toLowerCase()),
+      );
+      setFilteredJobTitles(filtered);
+    }
+  };
+
+  const handleJobTitleModalSelect = item => {
+    setPreferredJobTitle(item.jobTitle);
+    setFormData(prev => ({
+      ...prev,
+      jobTitle: item.jobTitle,
+    }));
+    setShowJobTitleModal(false);
+    setJobTitleSearchText('');
+  };
+
+  // Handler functions for industry modal
+  const handleIndustryModalOpen = () => {
+    setIndustrySearchText('');
+    setFilteredIndustries(industries);
+    setShowIndustryModal(true);
+  };
+
+  const handleIndustryModalSearch = text => {
+    setIndustrySearchText(text);
+    if (text.length > 0) {
+      const filtered = industries.filter(industry =>
+        industry.toLowerCase().includes(text.toLowerCase()),
+      );
+      setFilteredIndustries(filtered);
+    } else {
+      setFilteredIndustries(industries);
+    }
+  };
+
+  const handleIndustryModalSelect = industry => {
+    setFormData({
+      ...formData,
+      preferred_job_industry: industry,
+    });
+    setShowIndustryModal(false);
+    setIndustrySearchText('');
+  };
   // // console.log('formData?.skills-==>', formData?.skills);
   return (
     <>
@@ -1033,124 +1433,19 @@ const RegistrationS = ({navigation, route}) => {
                 {/* Preferred Job Industry */}
                 <View style={styles.fieldContainer}>
                   <Text style={styles.label}>Preferred Job Industry</Text>
-                  <View style={styles.dropdownBox}>
-                    <Picker
-                      style={{
-                        color: formData?.preferred_job_industry
-                          ? '#000'
-                          : '#D0D0D0',
-                      }}
-                      dropdownIconColor="#000"
-                      selectedValue={formData.preferred_job_industry}
-                      onValueChange={itemValue =>
-                        setFormData({
-                          ...formData,
-                          preferred_job_industry: itemValue,
-                        })
-                      }
-                      onFocus={() => {
-                        setFocusedInput('jobIndustry');
-                        // setLocationSelected(true); // Prevent location suggestions
-                      }}
-                      onBlur={() => setFocusedInput(null)}>
-                      <Picker.Item
-                        label="--Select Preferred Job Industry--"
-                        value=""
-                      />
-                      <Picker.Item
-                        label="IT & Software"
-                        value="IT & Software"
-                      />
-                      <Picker.Item
-                        label="Education & Training"
-                        value="Education & Training"
-                      />
-                      <Picker.Item
-                        label="Transportation"
-                        value="Transportation"
-                      />
-                      <Picker.Item
-                        label="Facility Management"
-                        value="Facility Management"
-                      />
-                      <Picker.Item
-                        label="Real Estate & Property"
-                        value="Real Estate & Property"
-                      />
-                      <Picker.Item
-                        label="Insurance & Stock Market"
-                        value="Insurance & Stock Market"
-                      />
-                      <Picker.Item
-                        label="E-Commerce Management"
-                        value="E-Commerce Management"
-                      />
-                      <Picker.Item
-                        label="Hospitality & Tourism"
-                        value="Hospitality & Tourism"
-                      />
-                      <Picker.Item
-                        label="Healthcare & Support"
-                        value="Healthcare & Support"
-                      />
-                      <Picker.Item label="BPO & KPO" value="BPO & KPO" />
-                      <Picker.Item
-                        label="Banking, Financial Services & Insurance"
-                        value="Banking, Financial Services & Insurance"
-                      />
-                      <Picker.Item
-                        label="E-commerce & Retail"
-                        value="E-commerce & Retail"
-                      />
-                      <Picker.Item
-                        label="Healthcare & Pharmaceuticals"
-                        value="Healthcare & Pharmaceuticals"
-                      />
-                      <Picker.Item
-                        label="Engineering & Manufacturing"
-                        value="Engineering & Manufacturing"
-                      />
-                      <Picker.Item
-                        label="Sales & Marketing"
-                        value="Sales & Marketing"
-                      />
-                      <Picker.Item label="Telecom" value="Telecom" />
-                      <Picker.Item label="Automobile" value="Automobile" />
-                      <Picker.Item
-                        label="Hospitality & Travel"
-                        value="Hospitality & Travel"
-                      />
-                      <Picker.Item
-                        label="Logistics & Supply Chain"
-                        value="Logistics & Supply Chain"
-                      />
-                      <Picker.Item
-                        label="Construction & Real Estate"
-                        value="Construction & Real Estate"
-                      />
-                      <Picker.Item
-                        label="Legal & Compliance"
-                        value="Legal & Compliance"
-                      />
-                      <Picker.Item
-                        label="Media, Advertising & Entertainment"
-                        value="Media, Advertising & Entertainment"
-                      />
-                      <Picker.Item
-                        label="Agriculture & Rural Development"
-                        value="Agriculture & Rural Development"
-                      />
-                      <Picker.Item
-                        label="Human Resources & Recruitment"
-                        value="Human Resources & Recruitment"
-                      />
-                      <Picker.Item
-                        label="Design & Creative"
-                        value="Design & Creative"
-                      />
-                      <Picker.Item label="Others" value="Others" />
-                    </Picker>
-                  </View>
+                  <TouchableOpacity
+                    style={styles.industryInput}
+                    onPress={handleIndustryModalOpen}>
+                    <Text
+                      style={[
+                        formData?.preferred_job_industry
+                          ? styles.industryInputText
+                          : styles.industryPlaceholderText,
+                      ]}>
+                      {formData?.preferred_job_industry || 'Select Industry'}
+                    </Text>
+                    <Icon name="arrow-drop-down" size={24} color="#535353" />
+                  </TouchableOpacity>
                 </View>
                 {/* <Text style={styles.label}>Total years of Experience</Text>
           <View style={styles.radioGroup}>
@@ -1167,16 +1462,19 @@ const RegistrationS = ({navigation, route}) => {
             ))}
           </View> */}
                 <Text style={styles.label}>Job Title</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter job title"
-                  value={formData?.jobTitle}
-                  placeholderTextColor="#BABFC7"
-                  onChangeText={text =>
-                    setFormData({...formData, jobTitle: text})
-                  }
-                />
-
+                <TouchableOpacity
+                  style={styles.jobTitleInput}
+                  onPress={handleJobTitleModalOpen}>
+                  <Text
+                    style={[
+                      preferredJobTitle
+                        ? styles.jobTitleInputText
+                        : styles.jobTitlePlaceholderText,
+                    ]}>
+                    {preferredJobTitle || 'Select Job Title'}
+                  </Text>
+                  <Icon name="arrow-drop-down" size={24} color="#535353" />
+                </TouchableOpacity>
                 <Text style={styles.label}>
                   Current Salary Per Month (Optional)
                 </Text>
@@ -1191,34 +1489,134 @@ const RegistrationS = ({navigation, route}) => {
                 {/* Resume Upload Section */}
                 <View style={styles.resumeUploadContainer}>
                   <View style={styles.resumeUploadCard}>
-                    {/* <View style={styles.uploadIconContainer}> */}
-                    <Image
-                      source={imagePath.download}
-                      style={{height: 49, width: 49, marginBottom: 10}}
-                      resizeMode="contain"
-                    />
-                    {/* </View> */}
-                    <Text style={styles.uploadInstructionText}>
-                      Upload PDF, Doc or Docx files only
-                    </Text>
-                    <Text style={styles.uploadSizeText}>
-                      Maximum file size 5MB
-                    </Text>
+                    {!resumeFile && (
+                      <>
+                        {/* <View style={styles.uploadIconContainer}> */}
+                        <Image
+                          source={imagePath.download}
+                          style={{height: 49, width: 49, marginBottom: 10}}
+                          resizeMode="contain"
+                        />
+                        {/* </View> */}
+                        <Text style={styles.uploadInstructionText}>
+                          Upload PDF, JPG, JPEG or PNG files
+                        </Text>
+                        <Text style={styles.uploadSizeText}>
+                          Maximum file size 5MB
+                        </Text>
+                      </>
+                    )}
 
                     {resumeFile ? (
-                      <View style={styles.resumeSelectedContainer}>
-                        <View style={styles.resumeFileInfo}>
-                          <Icon name="description" size={20} color="#FF8D53" />
-                          <Text style={styles.resumeFileName} numberOfLines={1}>
-                            {resumeFileName}
-                          </Text>
+                      <>
+                        {/* File Preview - PDF or Image */}
+                        <TouchableOpacity
+                          style={styles.pdfPreviewContainer}
+                          onPress={() => {
+                            if (resumeFileUri) {
+                              // Check if resumeFileUri is an image URL or file
+                              const isImageUrl =
+                                isImageFile ||
+                                (resumeFileUri &&
+                                  (resumeFileUri.includes('.jpg') ||
+                                    resumeFileUri.includes('.jpeg') ||
+                                    resumeFileUri.includes('.png')));
+
+                              // Check if resumeFileUri is a PDF URL or file
+                              const isPdfUrl =
+                                isPdfFile ||
+                                (resumeFileUri &&
+                                  (resumeFileUri.includes('.pdf') ||
+                                    resumeFileUri
+                                      .toLowerCase()
+                                      .includes('pdf')));
+
+                              // Open modal for both images and PDFs
+                              if (isImageUrl || isPdfUrl || resumeFileUri) {
+                                setShowPdfModal(true);
+                              }
+                            }
+                          }}
+                          activeOpacity={0.8}>
+                          {isImageFile && resumeFileUri ? (
+                            <Image
+                              source={{uri: resumeFileUri}}
+                              style={styles.pdfPreview}
+                              resizeMode="cover"
+                            />
+                          ) : (isPdfFile || resumeFileUri?.includes('.pdf')) &&
+                            !pdfLoadError &&
+                            resumeFileUri &&
+                            (resumeFileUri.startsWith('file://') ||
+                              resumeFileUri.startsWith('http://') ||
+                              resumeFileUri.startsWith('https://')) ? (
+                            <Pdf
+                              source={{uri: resumeFileUri, cache: true}}
+                              style={styles.pdfPreview}
+                              trustAllCerts={false}
+                              enablePaging={false}
+                              horizontal={false}
+                              page={1}
+                              fitPolicy={0}
+                              spacing={0}
+                              onLoadComplete={(numberOfPages, filePath) => {
+                                console.log(
+                                  `Number of pages: ${numberOfPages}`,
+                                );
+                                setPdfLoadError(false);
+                              }}
+                              onError={error => {
+                                console.log('PDF Error:', error);
+                                setPdfLoadError(true);
+                              }}
+                            />
+                          ) : (
+                            <View style={styles.pdfErrorContainer}>
+                              <Icon
+                                name="description"
+                                size={48}
+                                color="#FF8D53"
+                              />
+                              <Text style={styles.pdfErrorSubText}>
+                                Tap to view
+                              </Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                        <View style={styles.resumeSelectedContainer}>
                           <TouchableOpacity
-                            onPress={handleRemoveResume}
-                            style={styles.removeResumeButton}>
-                            <Icon name="close" size={18} color="#fff" />
+                            style={styles.resumeFileInfo}
+                            onPress={() => {
+                              const fileUri =
+                                resumeFile.uri ||
+                                resumeFile.fileCopyUri ||
+                                resumeFile.path;
+                              if (fileUri) {
+                                setShowPdfModal(true);
+                              }
+                            }}
+                            activeOpacity={0.8}>
+                            <Icon
+                              name="description"
+                              size={20}
+                              color="#FF8D53"
+                            />
+                            <Text
+                              style={styles.resumeFileName}
+                              numberOfLines={1}>
+                              {resumeFileName}
+                            </Text>
+                            <TouchableOpacity
+                              onPress={e => {
+                                e.stopPropagation();
+                                handleRemoveResume();
+                              }}
+                              style={styles.removeResumeButton}>
+                              <Icon name="close" size={18} color="#fff" />
+                            </TouchableOpacity>
                           </TouchableOpacity>
                         </View>
-                      </View>
+                      </>
                     ) : (
                       <TouchableOpacity
                         style={styles.addResumeButton}
@@ -1263,6 +1661,199 @@ const RegistrationS = ({navigation, route}) => {
           </View>
         </View>
       </KeyboardScroll>
+
+      {/* Fullscreen PDF Modal */}
+      <Modal
+        visible={showPdfModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowPdfModal(false)}>
+        <View style={styles.fullscreenModal}>
+          <View style={styles.fullscreenHeader}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowPdfModal(false)}>
+              <Icon name="close" size={28} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.fullscreenContent}>
+            {resumeFileUri &&
+            (isImageFile ||
+              resumeFileUri.includes('.jpg') ||
+              resumeFileUri.includes('.jpeg') ||
+              resumeFileUri.includes('.png')) ? (
+              <Image
+                source={{uri: resumeFileUri}}
+                style={styles.fullscreenImage}
+                resizeMode="contain"
+              />
+            ) : resumeFileUri &&
+              (isPdfFile ||
+                resumeFileUri.includes('.pdf') ||
+                resumeFileUri.startsWith('file://') ||
+                resumeFileUri.startsWith('http://') ||
+                resumeFileUri.startsWith('https://')) ? (
+              <Pdf
+                source={{uri: resumeFileUri, cache: true}}
+                style={styles.fullscreenPdf}
+                trustAllCerts={false}
+                enablePaging={true}
+                horizontal={false}
+                fitPolicy={0}
+                onError={error => {
+                  console.log('PDF Error:', error);
+                  showToastMessage('Failed to load PDF', 'danger');
+                  setShowPdfModal(false);
+                }}
+              />
+            ) : (
+              <View style={styles.fullscreenContent}>
+                <Text style={{color: '#fff', textAlign: 'center'}}>
+                  Unable to display file
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Industry Selection Modal */}
+      <Modal
+        visible={showIndustryModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowIndustryModal(false)}>
+        <TouchableOpacity
+          style={styles.industryModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowIndustryModal(false)}>
+          <TouchableOpacity
+            style={styles.industryModalContent}
+            activeOpacity={1}
+            onPress={e => e.stopPropagation()}>
+            <View style={styles.industryModalHeader}>
+              <Text style={styles.industryModalTitle}>Select Industry</Text>
+              <TouchableOpacity onPress={() => setShowIndustryModal(false)}>
+                <Icon name="close" size={24} color="#535353" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.industryModalSearchContainer}>
+              <TextInput
+                style={styles.industryModalSearchInput}
+                placeholder="Search Industry"
+                placeholderTextColor="#BABFC7"
+                value={industrySearchText}
+                onChangeText={handleIndustryModalSearch}
+                autoFocus={true}
+              />
+              <Icon name="search" size={24} color="#535353" />
+            </View>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              style={styles.industryModalOptions}>
+              {filteredIndustries.length > 0 ? (
+                filteredIndustries.map((industry, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.industryModalOption,
+                      formData?.preferred_job_industry === industry &&
+                        styles.industryModalOptionSelected,
+                    ]}
+                    onPress={() => handleIndustryModalSelect(industry)}>
+                    <Text
+                      style={[
+                        styles.industryModalOptionText,
+                        formData?.preferred_job_industry === industry &&
+                          styles.industryModalOptionTextSelected,
+                      ]}>
+                      {industry}
+                    </Text>
+                    {formData?.preferred_job_industry === industry && (
+                      <Icon name="check" size={20} color="#FF8D53" />
+                    )}
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View style={styles.industryNoResultsContainer}>
+                  <Text style={styles.industryNoResultsText}>
+                    No industries found
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Job Title Selection Modal */}
+      <Modal
+        visible={showJobTitleModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowJobTitleModal(false)}>
+        <TouchableOpacity
+          style={styles.jobTitleModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowJobTitleModal(false)}>
+          <TouchableOpacity
+            style={styles.jobTitleModalContent}
+            activeOpacity={1}
+            onPress={e => e.stopPropagation()}>
+            <View style={styles.jobTitleModalHeader}>
+              <Text style={styles.jobTitleModalTitle}>Select Job Title</Text>
+              <TouchableOpacity onPress={() => setShowJobTitleModal(false)}>
+                <Icon name="close" size={24} color="#535353" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.jobTitleModalSearchContainer}>
+              <TextInput
+                style={styles.jobTitleModalSearchInput}
+                placeholder="Search Job Title"
+                placeholderTextColor="#BABFC7"
+                value={jobTitleSearchText}
+                onChangeText={handleJobTitleModalSearch}
+                autoFocus={true}
+              />
+              <Icon name="search" size={24} color="#535353" />
+            </View>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              style={styles.jobTitleModalOptions}>
+              {filteredJobTitles.length > 0 ? (
+                filteredJobTitles.map((item, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.jobTitleModalOption,
+                      preferredJobTitle === item.jobTitle &&
+                        styles.jobTitleModalOptionSelected,
+                    ]}
+                    onPress={() => handleJobTitleModalSelect(item)}>
+                    <Text
+                      style={[
+                        styles.jobTitleModalOptionText,
+                        preferredJobTitle === item.jobTitle &&
+                          styles.jobTitleModalOptionTextSelected,
+                      ]}>
+                      {item.jobTitle}
+                    </Text>
+                    {preferredJobTitle === item.jobTitle && (
+                      <Icon name="check" size={20} color="#FF8D53" />
+                    )}
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View style={styles.jobTitleNoResultsContainer}>
+                  <Text style={styles.jobTitleNoResultsText}>
+                    No job titles found
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </>
   );
 };
@@ -1740,7 +2331,41 @@ const styles = StyleSheet.create({
   addMoreText: {
     fontSize: 14,
     color: '#535353',
-    marginLeft: 5,
+  },
+  inputContainer: {
+    position: 'relative',
+    zIndex: 1000,
+  },
+  suggestionBox: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    marginTop: 5,
+    maxHeight: 200,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 1001,
+  },
+  suggestionScrollView: {
+    maxHeight: 200,
+  },
+  suggestionItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: '#333',
   },
   skipBtn: {
     backgroundColor: '#FF8D53',
@@ -1753,6 +2378,250 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  fullscreenModal: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+  },
+  fullscreenHeader: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 20,
+    right: 20,
+    zIndex: 1000,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenPdf: {
+    flex: 1,
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height,
+  },
+  fullscreenImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height,
+  },
+  pdfPreviewContainer: {
+    width: '100%',
+    height: 100,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  pdfPreview: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  pdfErrorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    paddingVertical: 20,
+    height: 100,
+  },
+  pdfErrorSubText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  industryInput: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 10,
+    height: 45,
+  },
+  industryInputText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+  industryPlaceholderText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#D0D0D0',
+  },
+  industryModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  industryModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    width: '90%',
+    maxHeight: '80%',
+    padding: 20,
+  },
+  industryModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  industryModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#535353',
+  },
+  industryModalSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F4FD',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  industryModalSearchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#333',
+  },
+  industryModalOptions: {
+    maxHeight: 400,
+  },
+  industryModalOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  industryModalOptionSelected: {
+    backgroundColor: '#FFF5F0',
+  },
+  industryModalOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  industryModalOptionTextSelected: {
+    color: '#FF8D53',
+    fontWeight: '500',
+  },
+  industryNoResultsContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  industryNoResultsText: {
+    fontSize: 16,
+    color: '#999',
+  },
+  jobTitleInput: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 10,
+    height: 45,
+  },
+  jobTitleInputText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+  jobTitlePlaceholderText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#D0D0D0',
+  },
+  jobTitleModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  jobTitleModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    width: '90%',
+    maxHeight: '80%',
+    padding: 20,
+  },
+  jobTitleModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  jobTitleModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#535353',
+  },
+  jobTitleModalSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F4FD',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  jobTitleModalSearchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#333',
+  },
+  jobTitleModalOptions: {
+    maxHeight: 400,
+  },
+  jobTitleModalOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  jobTitleModalOptionSelected: {
+    backgroundColor: '#FFF5F0',
+  },
+  jobTitleModalOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  jobTitleModalOptionTextSelected: {
+    color: '#FF8D53',
+    fontWeight: '500',
+  },
+  jobTitleNoResultsContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  jobTitleNoResultsText: {
+    fontSize: 16,
+    color: '#999',
   },
 });
 

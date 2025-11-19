@@ -28,6 +28,7 @@ const TopHeaderJob = ({handleReferPress}) => {
   const route = useRoute();
   const insets = useSafeAreaInsets();
   const [userData, setUserData] = useState('');
+  const [jobseekerData, setJobseekerData] = useState('');
 
   useFocusEffect(
     useCallback(() => {
@@ -38,21 +39,26 @@ const TopHeaderJob = ({handleReferPress}) => {
     try {
       const userID = await AsyncStorage.getItem('UserID');
 
+      const form = new FormData();
+      form.append('userID', userID); // Changed to uppercase UserID as API expects
+
       const response = await fetch(
-        `https://jobipo.com/api/v3/view-profile?UserID=${userID}`,
+        `https://jobipo.com/api/v3/view-candidate-profile`,
         {
-          method: 'GET',
           headers: {
-            'Content-Type': 'application/json',
+            // Don't set Content-Type manually - fetch will set it automatically with boundary
             Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
           },
+          method: 'POST',
+          body: form,
         },
       );
 
       const data = await response.json();
-      console.log('data------1-----', data);
+      console.log('data----dd--1-----', data);
 
-      setUserData(data || null);
+      setUserData(data?.userData || null);
+      setJobseekerData(data?.jobseekerData || null);
 
       try {
         const decoded = JSON.parse(JSON.parse(data.data.languageKnown));
@@ -107,22 +113,16 @@ const TopHeaderJob = ({handleReferPress}) => {
         <View style={{marginVertical: 6}}>
           <ImageLoadView
             resizeMode="cover"
-            source={
-              userData?.data?.photo
-                ? {uri: userData?.data?.photo}
-                : imagePath.user
-            }
+            source={userData?.photo ? {uri: userData?.photo} : imagePath.user}
             style={styles.profileImage}
           />
         </View>
 
         <View style={styles.profileText}>
           <Text style={styles.profileName}>
-            {userData?.data?.userName || 'jobipo'}
+            {userData?.fullName || 'jobipo'}
           </Text>
-          <Text style={styles.profilePosition}>
-            {userData?.data?.preferredJobTitle}
-          </Text>
+          <Text style={styles.profilePosition}>{jobseekerData?.jobTitle}</Text>
         </View>
         {/* <Pressable style={{marginRight: 10}} onPress={handleReferPress}>
           <Image

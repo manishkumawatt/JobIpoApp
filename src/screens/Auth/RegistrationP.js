@@ -369,7 +369,10 @@ const RegistrationP = ({navigation, route}) => {
         endDate: educationData.endDate || '',
         skills: selectedSkills || [],
         englishSpeaking: englishSpeaking || '',
-        jobseekerId: fromOtpParam?.jobseekerId ? fromOtpParam?.jobseekerId : '',
+        jobseekerId: fromOtpParam?.jobseekerId
+          ? fromOtpParam?.jobseekerId
+          : 136503,
+        yearOfCompletion: educationData.yearOfCompletion || '',
         // userId: 257355,
         // jobseekerId: 125320,
         // educationLevel: 'Postgraduate',
@@ -384,7 +387,6 @@ const RegistrationP = ({navigation, route}) => {
       };
 
       console.log('API Request Data:----', JSON.stringify(requestData));
-
       const response = await fetch(
         'https://jobipo.com/api/v3/candidate-update-step-two',
         {
@@ -464,48 +466,165 @@ const RegistrationP = ({navigation, route}) => {
       yearOfCompletion: '',
     },
   );
-  // // console.log('formData:', formData);
-  const graduationDegrees = [
-    {label: 'B.A.', value: 'B.A.'},
-    {label: 'B.Sc.', value: 'B.Sc.'},
-    {label: 'B.Com.', value: 'B.Com.'},
-    {label: 'BBA', value: 'BBA'},
-    {label: 'BCA', value: 'BCA'},
-    {label: 'B.Tech', value: 'B.Tech'},
-    {label: 'B.E.', value: 'B.E.'},
-    {label: 'LLB', value: 'LLB'},
-    {label: 'B.Ed.', value: 'B.Ed.'},
-    {label: 'BFA', value: 'BFA'},
-    {label: 'BPT', value: 'BPT'},
-    {label: 'BHM', value: 'BHM'},
-    {label: 'Other', value: 'Other'},
-  ];
-
-  const postGraduationDegrees = [
-    {label: 'M.A.', value: 'M.A.'},
-    {label: 'M.Sc.', value: 'M.Sc.'},
-    {label: 'M.Com.', value: 'M.Com.'},
-    {label: 'MBA', value: 'MBA'},
-    {label: 'MCA', value: 'MCA'},
-    {label: 'M.Tech', value: 'M.Tech'},
-    {label: 'M.E.', value: 'M.E.'},
-    {label: 'LLM', value: 'LLM'},
-    {label: 'M.Ed.', value: 'M.Ed.'},
-    {label: 'MPA', value: 'MPA'},
-    {label: 'MFA', value: 'MFA'},
-    {label: 'Other', value: 'Other'},
-  ];
+  const [showEducationModal, setShowEducationModal] = useState(false);
+  const [modalEducationData, setModalEducationData] = useState({
+    educationLevel: '',
+    degree: '',
+    yearOfCompletion: '',
+    collegeName: '',
+  });
+  const [graduationDegrees, setGraduationDegrees] = useState([]);
+  const [postGraduationDegrees, setPostGraduationDegrees] = useState([]);
+  const [diplomaDegrees, setDiplomaDegrees] = useState([]);
+  const [loadingDegrees, setLoadingDegrees] = useState(false);
+  const [showDegreeModal, setShowDegreeModal] = useState(false);
+  const [degreeSearchText, setDegreeSearchText] = useState('');
+  const [filteredDegrees, setFilteredDegrees] = useState([]);
 
   const showDegreePicker = ['Graduate', 'Post Graduate'].includes(
     educationData.educationLevel,
   );
 
   const degreeOptions =
-    educationData.educationLevel === 'Graduate'
+    modalEducationData.educationLevel === 'Graduate'
       ? graduationDegrees
-      : educationData.educationLevel === 'Post Graduate'
+      : modalEducationData.educationLevel === 'Post Graduate'
         ? postGraduationDegrees
-        : [];
+        : modalEducationData.educationLevel === 'DIPLOMA'
+          ? diplomaDegrees
+          : [];
+
+  // Fetch degrees from API
+  useEffect(() => {
+    fetchDegrees();
+  }, []);
+
+  // Update filteredDegrees when degreeOptions changes
+  useEffect(() => {
+    if (showDegreeModal) {
+      setFilteredDegrees(degreeOptions);
+    }
+  }, [degreeOptions, showDegreeModal]);
+
+  // Handler functions for degree modal
+  const handleDegreeModalOpen = () => {
+    setDegreeSearchText('');
+    setFilteredDegrees(degreeOptions);
+    setShowDegreeModal(true);
+  };
+
+  const handleDegreeModalSearch = text => {
+    setDegreeSearchText(text);
+    if (!text.trim()) {
+      setFilteredDegrees(degreeOptions);
+    } else {
+      const filtered = degreeOptions.filter(
+        deg =>
+          deg.label.toLowerCase().includes(text.toLowerCase()) ||
+          deg.value.toLowerCase().includes(text.toLowerCase()),
+      );
+      setFilteredDegrees(filtered);
+    }
+  };
+
+  const handleDegreeModalSelect = degree => {
+    setModalEducationData({
+      ...modalEducationData,
+      degree: degree.value,
+    });
+    setShowDegreeModal(false);
+    setDegreeSearchText('');
+  };
+
+  const fetchDegrees = async () => {
+    try {
+      setLoadingDegrees(true);
+
+      // Fetch Graduation degrees (qualification=1)
+      const graduationFormData = new FormData();
+      graduationFormData.append('qualification', '1');
+      const graduationResponse = await fetch(
+        'https://jobipo.com/api/v3/fetch-degree',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          },
+          body: graduationFormData,
+        },
+      );
+      const graduationResult = await graduationResponse.json();
+      if (graduationResult?.status == 1) {
+        const parsed = graduationResult?.data;
+        const formatted = Array.isArray(parsed)
+          ? parsed.map(item => ({
+              label: item.degree || item.name || item,
+              value: item.degree || item.name || item,
+            }))
+          : [];
+        setGraduationDegrees(formatted);
+      }
+
+      // Fetch Post Graduation degrees (qualification=2)
+      const postGraduationFormData = new FormData();
+      postGraduationFormData.append('qualification', '2');
+      const postGraduationResponse = await fetch(
+        'https://jobipo.com/api/v3/fetch-degree',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          },
+          body: postGraduationFormData,
+        },
+      );
+      const postGraduationResult = await postGraduationResponse.json();
+      if (postGraduationResult?.status == 1) {
+        const parsed = postGraduationResult?.data;
+        const formatted = Array.isArray(parsed)
+          ? parsed.map(item => ({
+              label: item.degree || item.name || item,
+              value: item.degree || item.name || item,
+            }))
+          : [];
+        setPostGraduationDegrees(formatted);
+      }
+
+      // Fetch Diploma degrees (qualification=3)
+      const diplomaFormData = new FormData();
+      diplomaFormData.append('qualification', '3');
+      const diplomaResponse = await fetch(
+        'https://jobipo.com/api/v3/fetch-degree',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          },
+          body: diplomaFormData,
+        },
+      );
+      const diplomaResult = await diplomaResponse.json();
+      if (diplomaResult?.status == 1) {
+        const parsed = diplomaResult?.data;
+        const formatted = Array.isArray(parsed)
+          ? parsed.map(item => ({
+              label: item.degree || item.name || item,
+              value: item.degree || item.name || item,
+            }))
+          : [];
+        setDiplomaDegrees(formatted);
+      }
+    } catch (error) {
+      console.error('Error fetching degrees:', error);
+      // Fallback to empty arrays on error
+      setGraduationDegrees([]);
+      setPostGraduationDegrees([]);
+      setDiplomaDegrees([]);
+    } finally {
+      setLoadingDegrees(false);
+    }
+  };
+
   console.log('educationData.educationLevel', educationData.educationLevel);
   return (
     <KeyboardScroll
@@ -584,29 +703,36 @@ const RegistrationP = ({navigation, route}) => {
                 'Post Graduate',
                 'ITI',
                 'DIPLOMA',
-              ].map(level => (
-                <TouchableOpacity
-                  key={level}
-                  style={[
-                    styles.button,
-                    educationData.educationLevel === level &&
-                      styles.buttonSelected,
-                  ]}
-                  onPress={() => {
-                    setEducationData({...educationData, educationLevel: level});
-                  }}>
-                  <Text
-                    style={[
-                      styles.buttonText,
-                      educationData.educationLevel === level &&
-                        styles.buttonTextSelected,
-                    ]}>
-                    {level}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              ].map(level => {
+                const trimmedLevel = level.trim();
+                const isSelected =
+                  educationData.educationLevel === trimmedLevel ||
+                  educationData.educationLevel === level;
+                return (
+                  <TouchableOpacity
+                    key={level}
+                    style={[styles.button, isSelected && styles.buttonSelected]}
+                    onPress={() => {
+                      setModalEducationData({
+                        educationLevel: trimmedLevel,
+                        degree: educationData.degree || '',
+                        yearOfCompletion: educationData.yearOfCompletion || '',
+                        collegeName: educationData.collegeName || '',
+                      });
+                      setShowEducationModal(true);
+                    }}>
+                    <Text
+                      style={[
+                        styles.buttonText,
+                        isSelected && styles.buttonTextSelected,
+                      ]}>
+                      {level}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-            {showDegreePicker ? (
+            {/* {showDegreePicker ? (
               <View>
                 <Text style={styles.labelPicker}>Course Name</Text>
                 <View style={styles.pickerWrapper}>
@@ -646,7 +772,7 @@ const RegistrationP = ({navigation, route}) => {
               </View>
             ) : (
               <View style={{height: 20}} />
-            )}
+            )} */}
             <Text style={styles.label}>Skills (up to 10)</Text>
 
             <View style={styles.jobDetails}>
@@ -842,6 +968,244 @@ const RegistrationP = ({navigation, route}) => {
           </View>
         </View>
       </View>
+
+      {/* Education Details Modal */}
+      <Modal
+        visible={showEducationModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowEducationModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.educationModalContent}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Education Details</Text>
+              <TouchableOpacity
+                onPress={() => setShowEducationModal(false)}
+                style={styles.closeButton}>
+                <Icon name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Body */}
+            <ScrollView
+              style={styles.modalBody}
+              keyboardShouldPersistTaps="handled">
+              {/* Education Level Field */}
+              <View style={styles.modalFieldContainer}>
+                <Text style={styles.modalLabel}>Education Level</Text>
+                <View style={styles.modalInputContainer}>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={modalEducationData.educationLevel}
+                    editable={false}
+                    placeholder="Select education level"
+                    placeholderTextColor="#BABFC7"
+                  />
+                </View>
+              </View>
+
+              {/* Degree Field - Only show for Graduate, Post Graduate, and DIPLOMA */}
+              {['Graduate', 'Post Graduate', 'DIPLOMA'].includes(
+                modalEducationData.educationLevel,
+              ) && (
+                <View style={styles.modalFieldContainer}>
+                  <Text style={styles.modalLabel}>Select degree</Text>
+                  <TouchableOpacity
+                    style={styles.degreeInput}
+                    onPress={handleDegreeModalOpen}>
+                    <Text
+                      style={[
+                        modalEducationData.degree
+                          ? styles.degreeInputText
+                          : styles.degreePlaceholderText,
+                      ]}>
+                      {modalEducationData.degree
+                        ? degreeOptions.find(
+                            deg => deg.value === modalEducationData.degree,
+                          )?.label || modalEducationData.degree
+                        : 'Select Degree'}
+                    </Text>
+                    <Icon name="arrow-drop-down" size={24} color="#535353" />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Year of Completion Field */}
+              <View style={styles.modalFieldContainer}>
+                <Text style={styles.modalLabel}>Year of Completion</Text>
+                <View style={styles.modalInputContainer}>
+                  <TextInput
+                    style={[
+                      styles.modalInput,
+                      modalEducationData.yearOfCompletion &&
+                        styles.modalInputValid,
+                    ]}
+                    value={modalEducationData.yearOfCompletion}
+                    onChangeText={text => {
+                      setModalEducationData({
+                        ...modalEducationData,
+                        yearOfCompletion: text,
+                      });
+                    }}
+                    placeholder="Enter year"
+                    placeholderTextColor="#BABFC7"
+                    keyboardType="numeric"
+                    maxLength={4}
+                  />
+                  {modalEducationData.yearOfCompletion && (
+                    <Icon
+                      name="check-circle"
+                      size={20}
+                      color="#4CAF50"
+                      style={styles.checkIcon}
+                    />
+                  )}
+                </View>
+              </View>
+
+              {/* College Name Field */}
+              <View style={styles.modalFieldContainer}>
+                <Text style={styles.modalLabel}>Institute Name</Text>
+                <View style={styles.modalInputContainer}>
+                  <TextInput
+                    style={[
+                      styles.modalInput,
+                      modalEducationData.collegeName && styles.modalInputValid,
+                    ]}
+                    value={modalEducationData.collegeName}
+                    onChangeText={text => {
+                      setModalEducationData({
+                        ...modalEducationData,
+                        collegeName: text,
+                      });
+                    }}
+                    placeholder="Enter institute name"
+                    placeholderTextColor="#BABFC7"
+                  />
+                  {modalEducationData.collegeName && (
+                    <Icon
+                      name="check-circle"
+                      size={20}
+                      color="#4CAF50"
+                      style={styles.checkIcon}
+                    />
+                  )}
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Modal Footer */}
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowEducationModal(false)}>
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSaveButton}
+                onPress={() => {
+                  // Validate required fields
+                  if (!modalEducationData.educationLevel) {
+                    showToastMessage('Please select education level', 'danger');
+                    return;
+                  }
+                  if (
+                    ['Graduate', 'Post Graduate', 'DIPLOMA'].includes(
+                      modalEducationData.educationLevel,
+                    ) &&
+                    !modalEducationData.degree
+                  ) {
+                    showToastMessage('Please select degree', 'danger');
+                    return;
+                  }
+
+                  // Update educationData with modal data
+                  setEducationData({
+                    ...educationData,
+                    educationLevel: modalEducationData.educationLevel,
+                    degree: modalEducationData.degree || '',
+                    yearOfCompletion: modalEducationData.yearOfCompletion || '',
+                    collegeName: modalEducationData.collegeName || '',
+                  });
+
+                  // Close modal
+                  setShowEducationModal(false);
+                  showToastMessage('Education details saved', 'success');
+                }}>
+                <Text style={styles.modalSaveButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Degree Selection Modal */}
+      <Modal
+        visible={showDegreeModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDegreeModal(false)}>
+        <TouchableOpacity
+          style={styles.degreeModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDegreeModal(false)}>
+          <TouchableOpacity
+            style={styles.degreeModalContent}
+            activeOpacity={1}
+            onPress={e => e.stopPropagation()}>
+            <View style={styles.degreeModalHeader}>
+              <Text style={styles.degreeModalTitle}>Select Degree</Text>
+              <TouchableOpacity onPress={() => setShowDegreeModal(false)}>
+                <Icon name="close" size={24} color="#535353" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.degreeModalSearchContainer}>
+              <TextInput
+                style={styles.degreeModalSearchInput}
+                placeholder="Search Degree"
+                placeholderTextColor="#BABFC7"
+                value={degreeSearchText}
+                onChangeText={handleDegreeModalSearch}
+                autoFocus={true}
+              />
+              <Icon name="search" size={24} color="#535353" />
+            </View>
+            <ScrollView style={styles.degreeModalOptions}>
+              {filteredDegrees.length > 0 ? (
+                filteredDegrees.map((deg, index) => (
+                  <TouchableOpacity
+                    key={deg.value || index}
+                    style={[
+                      styles.degreeModalOption,
+                      modalEducationData.degree === deg.value &&
+                        styles.degreeModalOptionSelected,
+                    ]}
+                    onPress={() => handleDegreeModalSelect(deg)}>
+                    <Text
+                      style={[
+                        styles.degreeModalOptionText,
+                        modalEducationData.degree === deg.value &&
+                          styles.degreeModalOptionTextSelected,
+                      ]}>
+                      {deg.label}
+                    </Text>
+                    {modalEducationData.degree === deg.value && (
+                      <Icon name="check" size={20} color="#FF8D53" />
+                    )}
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View style={styles.degreeNoResultsContainer}>
+                  <Text style={styles.degreeNoResultsText}>
+                    No degrees found
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardScroll>
   );
 };
@@ -1385,13 +1749,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
   modalContent: {
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -1476,6 +1833,207 @@ const styles = StyleSheet.create({
   englishSpeakingLabelActive: {
     color: '#535353',
     fontWeight: '500',
+  },
+  educationModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: '90%',
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalBody: {
+    padding: 20,
+    maxHeight: 400,
+  },
+  modalFieldContainer: {
+    marginBottom: 20,
+  },
+  modalLabel: {
+    fontSize: 14,
+    color: '#535353',
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  modalInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    paddingHorizontal: 12,
+    height: 45,
+  },
+  modalInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+  },
+  modalInputValid: {
+    borderColor: '#4CAF50',
+  },
+  checkIcon: {
+    marginLeft: 8,
+  },
+  modalPickerWrapper: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    height: 45,
+    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  modalPicker: {
+    height: 60,
+    color: '#333',
+  },
+  modalPickerItem: {
+    fontSize: 14,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    gap: 12,
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FF8D53',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelButtonText: {
+    color: '#FF8D53',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalSaveButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#FF8D53',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSaveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  degreeInput: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    height: 45,
+  },
+  degreeInputText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+  },
+  degreePlaceholderText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#BABFC7',
+  },
+  degreeModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  degreeModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    width: '90%',
+    maxHeight: '80%',
+    padding: 20,
+  },
+  degreeModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  degreeModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#535353',
+  },
+  degreeModalSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F4FD',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  degreeModalSearchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#333',
+  },
+  degreeModalOptions: {
+    maxHeight: 400,
+  },
+  degreeModalOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  degreeModalOptionSelected: {
+    backgroundColor: '#FFF5F0',
+  },
+  degreeModalOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  degreeModalOptionTextSelected: {
+    color: '#FF8D53',
+    fontWeight: '500',
+  },
+  degreeNoResultsContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  degreeNoResultsText: {
+    fontSize: 16,
+    color: '#999',
   },
 });
 

@@ -11,6 +11,7 @@ import {
   FlatList,
   Platform,
   Keyboard,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useFocusEffect} from '@react-navigation/native';
@@ -28,10 +29,12 @@ const EditExperience = ({navigation, route}) => {
     jobSeekerData,
     data,
     index = null,
+    addNew,
     experience,
     profileJobseekerData,
+    jobseekerId,
   } = route.params;
-  console.log('jobSeekerData-=-=-=-=-=', jobSeekerData);
+  console.log('experience-=dd-=-dd=-=-=', experience?.experience?.length);
   const dummyData = {
     jobTitle: '',
     jobRole: '',
@@ -51,14 +54,60 @@ const EditExperience = ({navigation, route}) => {
     preferred_job_industry: '',
     yearOfCompletion: '',
     totalWorkingMonths: '',
+    location: '',
   };
   const [skill, setSkill] = useState('');
-  const [formData, setFormData] = useState(data || dummyData);
+  // Initialize formData based on addNew flag
+  const getInitialFormData = () => {
+    if (addNew) {
+      return dummyData;
+    }
+    return data || dummyData;
+  };
+  const [formData, setFormData] = useState(getInitialFormData());
   const [formDataa, setFormDataa] = useState({skills: []});
   const [userId, setUserId] = useState();
   // const [selectedSkills, setSelectedSkills] = useState(JSON.parse(data?.skills) || []);
   const [open, setOpen] = useState(false);
   const [currentSalary, setCurrentSalary] = useState('');
+  const [jobTitles, setJobTitles] = useState([]);
+  const [filteredTitles, setFilteredTitles] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [focusedInput, setFocusedInput] = useState(null);
+  const [filteredIndustries, setFilteredIndustries] = useState([]);
+  const [showIndustrySuggestions, setShowIndustrySuggestions] = useState(false);
+  const [showIndustryModal, setShowIndustryModal] = useState(false);
+  const [industrySearchText, setIndustrySearchText] = useState('');
+
+  // Industry list
+  const industries = [
+    'IT & Software',
+    'Education & Training',
+    'Transportation',
+    'Facility Management',
+    'Real Estate & Property',
+    'Insurance & Stock Market',
+    'E-Commerce Management',
+    'Hospitality & Tourism',
+    'Healthcare & Support',
+    'BPO & KPO',
+    'Banking, Financial Services & Insurance',
+    'E-commerce & Retail',
+    'Healthcare & Pharmaceuticals',
+    'Engineering & Manufacturing',
+    'Sales & Marketing',
+    'Telecom',
+    'Automobile',
+    'Hospitality & Travel',
+    'Logistics & Supply Chain',
+    'Construction & Real Estate',
+    'Legal & Compliance',
+    'Media, Advertising & Entertainment',
+    'Agriculture & Rural Development',
+    'Human Resources & Recruitment',
+    'Design & Creative',
+    'Others',
+  ];
 
   const colorScheme = useColorScheme();
   const textColor = colorScheme === 'dark' ? '#000' : '#000';
@@ -73,7 +122,7 @@ const EditExperience = ({navigation, route}) => {
       return [];
     }
   });
-
+  // console.log('experience.length-=-=-=-=-=', experience.length);
   // useFocusEffect(
   //   useCallback(() => {
   //     // console.log('Screen focused. Raw skills from backend:', data.skills);
@@ -138,8 +187,43 @@ const EditExperience = ({navigation, route}) => {
   }, []);
   useFocusEffect(
     useCallback(() => {
-      setFormData(data || dummyData);
-    }, [data]),
+      if (addNew) {
+        setFormData(dummyData);
+        setSelectedSkills([]);
+        return;
+      }
+
+      // Prefill with data from params
+      if (data && typeof data === 'object') {
+        setFormData(data);
+        // Parse skills if present
+        try {
+          const parsedSkills =
+            typeof data.skills === 'string'
+              ? JSON.parse(data.skills)
+              : data.skills || [];
+          setSelectedSkills(parsedSkills);
+        } catch (e) {
+          setSelectedSkills([]);
+        }
+      } else if (Array.isArray(data) && index != null && index < data.length) {
+        const item = data[index];
+        setFormData(item);
+        // Parse skills if present
+        try {
+          const parsedSkills =
+            typeof item.skills === 'string'
+              ? JSON.parse(item.skills)
+              : item.skills || [];
+          setSelectedSkills(parsedSkills);
+        } catch (e) {
+          setSelectedSkills([]);
+        }
+      } else {
+        setFormData(dummyData);
+        setSelectedSkills([]);
+      }
+    }, [data, index, addNew]),
   );
 
   useEffect(() => {
@@ -154,7 +238,93 @@ const EditExperience = ({navigation, route}) => {
       }
     };
     fetchUserId();
+    fetchJobTitles();
   }, []);
+
+  const fetchJobTitles = async () => {
+    try {
+      const response = await fetch(
+        'https://jobipo.com/api/v3/fetch-job-titles',
+        {
+          method: 'GET',
+          headers: {
+            Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          },
+        },
+      );
+
+      const result = await response.json();
+
+      if (result?.status === 1 && result?.msg) {
+        const parsed = JSON.parse(result.msg);
+        setJobTitles(parsed);
+      }
+    } catch (error) {
+      // Silently handle error
+    }
+  };
+
+  const handleJobChange = text => {
+    handleChange('jobTitle', text);
+    if (text.length > 0) {
+      const filtered = jobTitles.filter(item =>
+        item?.jobTitle?.toLowerCase().includes(text.toLowerCase()),
+      );
+      setFilteredTitles(filtered);
+      setShowSuggestions(filtered.length > 0);
+    } else {
+      setFilteredTitles([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSuggestionSelect = item => {
+    handleChange('jobTitle', item.jobTitle);
+    setShowSuggestions(false);
+  };
+
+  const handleIndustryChange = text => {
+    handleChange('industry', text);
+    if (text.length > 0) {
+      const filtered = industries.filter(industry =>
+        industry.toLowerCase().includes(text.toLowerCase()),
+      );
+      setFilteredIndustries(filtered);
+      setShowIndustrySuggestions(filtered.length > 0);
+    } else {
+      setFilteredIndustries([]);
+      setShowIndustrySuggestions(false);
+    }
+  };
+
+  const handleIndustrySelect = industry => {
+    handleChange('industry', industry);
+    setShowIndustrySuggestions(false);
+  };
+
+  const handleIndustryModalOpen = () => {
+    setIndustrySearchText('');
+    setFilteredIndustries(industries);
+    setShowIndustryModal(true);
+  };
+
+  const handleIndustryModalSearch = text => {
+    setIndustrySearchText(text);
+    if (text.length > 0) {
+      const filtered = industries.filter(industry =>
+        industry.toLowerCase().includes(text.toLowerCase()),
+      );
+      setFilteredIndustries(filtered);
+    } else {
+      setFilteredIndustries(industries);
+    }
+  };
+
+  const handleIndustryModalSelect = industry => {
+    handleChange('industry', industry);
+    setShowIndustryModal(false);
+    setIndustrySearchText('');
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -280,89 +450,146 @@ const EditExperience = ({navigation, route}) => {
   };
 
   const handleSubmit = async () => {
-    if (
-      formData?.companyName === '' ||
-      formData?.jobTitle === '' ||
-      formData?.industry === '' ||
-      formData?.totalWorkingMonths === ''
-    ) {
-      showToastMessage('Please fill all the fields', 'danger');
-      return;
-    }
+    try {
+      const userID = await AsyncStorage.getItem('UserID');
 
-    // jobSeekerData is the old education array passed from parent
-    // Parse it to get the existing education entries
-    let oldEducationArray = [];
-    if (Array.isArray(jobSeekerData)) {
-      // If jobSeekerData is directly an array (education array)
-      oldEducationArray = jobSeekerData;
-    } else if (jobSeekerData && jobSeekerData.education) {
-      // If jobSeekerData is an object with education property
-      oldEducationArray = parseIfArrayString(jobSeekerData.education);
-    } else if (profileJobseekerData && profileJobseekerData.education) {
-      // Fallback: get from profileJobseekerData
-      oldEducationArray = parseIfArrayString(profileJobseekerData.education);
-    }
+      if (!userID) {
+        showToastMessage('User ID not found. Please log in again.', 'danger');
+        return;
+      }
 
-    const educationArray = Array.isArray(oldEducationArray)
-      ? oldEducationArray
-      : [];
+      // Validate required fields
+      if (!formData?.companyName?.trim()) {
+        showToastMessage('Please enter company name', 'danger');
+        return;
+      }
+      if (!formData?.jobTitle?.trim()) {
+        showToastMessage('Please enter job title', 'danger');
+        return;
+      }
+      if (!formData?.industry) {
+        showToastMessage('Please select industry', 'danger');
+        return;
+      }
+      if (!formData?.totalWorkingMonths?.trim()) {
+        showToastMessage('Please enter total working period', 'danger');
+        return;
+      }
 
-    // Parse old experience array
-    let oldExperienceArray = [];
-    if (Array.isArray(experience)) {
-      // If experience is directly an array
-      oldExperienceArray = experience;
-    } else if (typeof experience === 'string') {
-      // If experience is a JSON string
-      oldExperienceArray = parseIfArrayString(experience);
-    } else if (profileJobseekerData && profileJobseekerData.experience) {
-      // Fallback: get from profileJobseekerData
-      oldExperienceArray = parseIfArrayString(profileJobseekerData.experience);
-    }
-
-    const experienceArray = Array.isArray(oldExperienceArray)
-      ? oldExperienceArray
-      : [];
-
-    // Create new experience entry with skills
-    const newEntry = {
-      ...formData,
-      skills: JSON.stringify(selectedSkills),
-    };
-
-    // Merge old experience with new experience entry
-    const hasValidIndex =
-      index !== null && index !== undefined && !Number.isNaN(Number(index));
-    const updatedExperienceData = hasValidIndex
-      ? experienceArray.length > 0
-        ? experienceArray.map((item, id) =>
-            id === Number(index) ? newEntry : item,
-          )
-        : [newEntry]
-      : [...experienceArray, newEntry];
-
-    // Build payload with full profile data, education, and updated experience
-    const payload = {
-      ...(profileJobseekerData || {}),
-      education: JSON.stringify(educationArray),
-      experience: JSON.stringify(updatedExperienceData),
-    };
-
-    await fetch(`https://jobipo.com/api/Agent/doupdatejobp`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    })
-      .then(res => res.json())
-      .then(res => {
-        if (res) {
-          showToastMessage('Details updated successfully', 'success');
-          navigation.goBack();
+      // Parse skills - handle both string and array formats
+      let skillsArray = [];
+      try {
+        if (typeof selectedSkills === 'string') {
+          skillsArray = JSON.parse(selectedSkills);
+        } else if (Array.isArray(selectedSkills)) {
+          skillsArray = selectedSkills;
         }
-      })
-      .catch(err => {
-        showToastMessage('Error updating details');
-      });
+      } catch (e) {
+        skillsArray = Array.isArray(selectedSkills) ? selectedSkills : [];
+      }
+
+      // Create experience payload - matching the Postman example structure
+      const experiencePayload = {
+        updateIndex: addNew
+          ? Array.isArray(experience?.experience)
+            ? experience?.experience.length + 1
+            : 0
+          : index != null
+            ? index
+            : 0,
+        companyName: formData.companyName || '',
+        industry: formData.industry || '',
+        totalWorkingMonths: formData.totalWorkingMonths || '',
+        jobTitle: formData.jobTitle || '',
+        // location: formData.location || 'mumbai',
+        // jobRole: formData.jobRole || 'SoftwareEngineer',
+        // currentlyWorking: formData.currentlyWorking || 'Full-Time',
+        // employmentType: formData.employmentType || 'Full-Time',
+        // startDate: formData.startDate || '2020-01-01',
+        // endDate: formData.endDate || '2021-12-31',
+        // currentSalary: formData.currentSalary || '70000',
+        // workMode: formData.workMode || 'Remote',
+        // experienceLevel: formData.experienceLevel || 'Junior',
+        // preferred_job_Title: formData.preferred_job_Title || 'SeniorDeveloper',
+        // preferred_job_industry: formData.preferred_job_industry || 'it',
+        // yearOfCompletion: formData.yearOfCompletion || '2021',
+        // skills: Array.isArray(skillsArray)
+        //   ? skillsArray
+        //   : ['PHP', 'CodeIgniter', 'MySQL'],
+      };
+      // let arr = [
+      //   {
+      //     updateIndex: 0,
+      //     companyName: 'TechCorp Pvt Ltd',
+      //     industry: 'Information Technology',
+      //     totalWorkingMonths: '24',
+      //     location: 'Mumbai',
+      //     jobTitle: 'tort',
+      //     jobRole: 'Software Engineer',
+      //     currentlyWorking: 'No',
+      //     employmentType: 'Full-Time',
+      //     startDate: '2020-01-01',
+      //     endDate: '2021-12-31',
+      //     currentSalary: '800000',
+      //     workMode: 'Remote',
+      //     experienceLevel: 'Junior',
+      //     preferred_job_Title: 'Senior Developer',
+      //     preferred_job_industry: 'IT',
+      //     yearOfCompletion: '2021',
+      //     skills: ['PHP', 'CodeIgniter', 'MySQL'],
+      //   },
+      //   {
+      //     companyName: 'StartupXYZ',
+      //     industry: 'FinTech',
+      //     totalWorkingMonths: '12',
+      //     location: 'Pune',
+      //     jobTitle: 'Full Stack Developer',
+      //     currentlyWorking: 'Yes',
+      //     employmentType: 'Full-Time',
+      //     startDate: '2022-01-01',
+      //     endDate: '',
+      //     currentSalary: '1200000',
+      //     workMode: 'Hybrid',
+      //     skills: ['Laravel', 'Vue.js', 'Docker'],
+      //   },
+      // ];
+      const submissionData = new FormData();
+      submissionData.append('userID', userID);
+      submissionData.append('jobseekerId', jobseekerId);
+      // submissionData.append('experiences', arr);
+      submissionData.append('experiences', JSON.stringify([experiencePayload]));
+
+      console.log(
+        'submissionData Array.isArray(experience)',
+        Array.isArray(experience?.experience),
+      );
+      console.log('submissionData experience', submissionData);
+      const res = await fetch(
+        'https://jobipo.com/api/v3/update-candidate-profile',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          },
+          body: submissionData,
+        },
+      );
+
+      const responseData = await res.json();
+      if (responseData?.success) {
+        showToastMessage('Experience updated successfully', 'success');
+        navigation.goBack();
+      } else {
+        showToastMessage(
+          responseData?.message || 'Something went wrong.',
+          'danger',
+        );
+      }
+      console.log('responseData-=-----==-=-=-=', responseData);
+    } catch (err) {
+      console.log('Error:', err);
+      showToastMessage('Something went wrong. Please try again.', 'danger');
+    }
   };
 
   return (
@@ -385,109 +612,68 @@ const EditExperience = ({navigation, route}) => {
             />
 
             <Text style={styles.label}> Job Title</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter Job Title"
-              placeholderTextColor={isDarkMode ? '#555' : '#555'}
-              value={formData.jobTitle}
-              onChangeText={text => handleChange('jobTitle', text)}
-            />
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter Job Title"
+                placeholderTextColor={isDarkMode ? '#555' : '#555'}
+                value={formData.jobTitle}
+                onChangeText={handleJobChange}
+                onFocus={() => {
+                  setFocusedInput('jobTitle');
+                  if (
+                    formData.jobTitle?.length > 0 &&
+                    filteredTitles.length > 0
+                  ) {
+                    setShowSuggestions(true);
+                  }
+                }}
+                onBlur={() => {
+                  // Delay hiding suggestions to allow clicking on them
+                  setTimeout(() => {
+                    setFocusedInput(null);
+                    setShowSuggestions(false);
+                  }, 200);
+                }}
+              />
+              {showSuggestions && filteredTitles.length > 0 && (
+                <View style={styles.suggestionBox}>
+                  <ScrollView
+                    keyboardShouldPersistTaps="handled"
+                    nestedScrollEnabled={true}
+                    style={styles.suggestionScrollView}>
+                    {filteredTitles.map((item, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.suggestionItem}
+                        onPress={() => {
+                          handleSuggestionSelect(item);
+                          setShowSuggestions(false);
+                        }}>
+                        <Text style={styles.suggestionText}>
+                          {item.jobTitle}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
 
             <Text style={styles.label}> Industry</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={formData?.industry}
-                onValueChange={itemValue => handleChange('industry', itemValue)}
-                style={{color: textColor}}>
-                <Picker.Item label="Select Industry" value="" />
-                <Picker.Item label="IT & Software" value="IT & Software" />
-                <Picker.Item
-                  label="Education & Training"
-                  value="Education & Training"
-                />
-                <Picker.Item label="Transportation" value="Transportation" />
-                <Picker.Item
-                  label="Facility Management"
-                  value="Facility Management"
-                />
-                <Picker.Item
-                  label="Real Estate & Property"
-                  value="Real Estate & Property"
-                />
-                <Picker.Item
-                  label="Insurance & Stock Market"
-                  value="Insurance & Stock Market"
-                />
-                <Picker.Item
-                  label="E-Commerce Management"
-                  value="E-Commerce Management"
-                />
-                <Picker.Item
-                  label="Hospitality & Tourism"
-                  value="Hospitality & Tourism"
-                />
-                <Picker.Item
-                  label="Healthcare & Support"
-                  value="Healthcare & Support"
-                />
-                <Picker.Item label="BPO & KPO" value="BPO & KPO" />
-                <Picker.Item
-                  label="Banking, Financial Services & Insurance"
-                  value="Banking, Financial Services & Insurance"
-                />
-                <Picker.Item
-                  label="E-commerce & Retail"
-                  value="E-commerce & Retail"
-                />
-                <Picker.Item
-                  label="Healthcare & Pharmaceuticals"
-                  value="Healthcare & Pharmaceuticals"
-                />
-                <Picker.Item
-                  label="Engineering & Manufacturing"
-                  value="Engineering & Manufacturing"
-                />
-                <Picker.Item
-                  label="Sales & Marketing"
-                  value="Sales & Marketing"
-                />
-                <Picker.Item label="Telecom" value="Telecom" />
-                <Picker.Item label="Automobile" value="Automobile" />
-                <Picker.Item
-                  label="Hospitality & Travel"
-                  value="Hospitality & Travel"
-                />
-                <Picker.Item
-                  label="Logistics & Supply Chain"
-                  value="Logistics & Supply Chain"
-                />
-                <Picker.Item
-                  label="Construction & Real Estate"
-                  value="Construction & Real Estate"
-                />
-                <Picker.Item
-                  label="Legal & Compliance"
-                  value="Legal & Compliance"
-                />
-                <Picker.Item
-                  label="Media, Advertising & Entertainment"
-                  value="Media, Advertising & Entertainment"
-                />
-                <Picker.Item
-                  label="Agriculture & Rural Development"
-                  value="Agriculture & Rural Development"
-                />
-                <Picker.Item
-                  label="Human Resources & Recruitment"
-                  value="Human Resources & Recruitment"
-                />
-                <Picker.Item
-                  label="Design & Creative"
-                  value="Design & Creative"
-                />
-                <Picker.Item label="Others" value="Others" />
-              </Picker>
-            </View>
+            <TouchableOpacity
+              style={styles.industryInput}
+              onPress={handleIndustryModalOpen}
+              activeOpacity={0.7}>
+              <Text
+                style={[
+                  styles.inputText,
+                  !formData?.industry && styles.placeholderText,
+                ]}>
+                {formData?.industry || 'Select Industry'}
+              </Text>
+              <Icon name="keyboard-arrow-down" size={24} color="#535353" />
+            </TouchableOpacity>
 
             <Text style={styles.label}>Total Working Period (in Months)</Text>
             <TextInput
@@ -551,6 +737,67 @@ const EditExperience = ({navigation, route}) => {
           </View>
         </View>
       </KeyboardScroll>
+
+      {/* Industry Selection Modal */}
+      <Modal
+        visible={showIndustryModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowIndustryModal(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowIndustryModal(false)}>
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={e => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Industry</Text>
+              <TouchableOpacity onPress={() => setShowIndustryModal(false)}>
+                <Icon name="close" size={24} color="#535353" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalSearchContainer}>
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Search Industry"
+                placeholderTextColor="#BABFC7"
+                value={industrySearchText}
+                onChangeText={handleIndustryModalSearch}
+                autoFocus={true}
+              />
+              <Icon name="search" size={24} color="#535353" />
+            </View>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              style={styles.modalOptions}>
+              {filteredIndustries.map((industry, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.modalOption,
+                    formData?.industry === industry &&
+                      styles.modalOptionSelected,
+                  ]}
+                  onPress={() => handleIndustryModalSelect(industry)}>
+                  <Text
+                    style={[
+                      styles.modalOptionText,
+                      formData?.industry === industry &&
+                        styles.modalOptionTextSelected,
+                    ]}>
+                    {industry}
+                  </Text>
+                  {formData?.industry === industry && (
+                    <Icon name="check" size={20} color="#FF8D53" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </>
   );
 };
@@ -652,6 +899,14 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#ffffff',
   },
+  industryInput: {
+    padding: 12,
+    borderRadius: 5,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   buttonGroup: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -672,6 +927,114 @@ const styles = StyleSheet.create({
   buttonText: {color: '#333'},
   buttonTextSelected: {color: '#fff'},
   buttonSelected: {backgroundColor: '#0d4574'},
+  inputContainer: {
+    position: 'relative',
+    zIndex: 1000,
+  },
+  suggestionBox: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    marginTop: 5,
+    maxHeight: 200,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 1001,
+  },
+  suggestionScrollView: {
+    maxHeight: 200,
+  },
+  suggestionItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  inputText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+  placeholderText: {
+    color: '#BABFC7',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    maxHeight: '80%',
+    width: '100%',
+    maxWidth: 400,
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  modalSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalSearchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+    paddingVertical: 8,
+    paddingRight: 10,
+  },
+  modalOptions: {
+    maxHeight: 400,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalOptionSelected: {
+    backgroundColor: '#f8f8f8',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  modalOptionTextSelected: {
+    color: '#FF8D53',
+    fontWeight: '600',
+  },
 });
 
 export default EditExperience;

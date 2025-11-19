@@ -106,9 +106,9 @@ export default function AddEducation() {
             ))}
           </View>
 
-          <Text style={styles.label}>College Name</Text>
+          <Text style={styles.label}>Institute Name</Text>
           <TextInput
-            placeholder="e.g. Sage college"
+            placeholder="Enter institute name"
             placeholderTextColor={isDarkMode ? '#555' : '#555'}
             style={styles.input}
             value={collegeName}

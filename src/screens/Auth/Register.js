@@ -219,35 +219,73 @@ const Register = ({navigation, route}) => {
     // // console.log('accountReq', accountReq);
     if (validForm.status) {
       Keyboard.dismiss();
+      let lati = accountReq?.lat || lat;
+      let longi = accountReq?.lng || lng;
 
-      let dic = {...accountReq};
-      delete dic.validators;
+      // Fetch pincode from Google Geocoding API
+      const fetchPincode = async () => {
+        try {
+          const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lati},${longi}&key=AIzaSyDqBEtr9Djdq0b9NTCMmquSrKiPCCv384o`;
+          console.log('Fetching pincode from:', geocodeUrl);
 
-      let obj = {
-        fullName: accountReq?.fullName,
-        email: accountReq?.email,
-        mobile: accountReq?.mobile,
-        referCode: accountReq?.referCode,
-        current_location: accountReq?.current_location,
-        lat: accountReq?.lat || lat,
-        lng: accountReq?.lng || lng,
-        city: accountReq?.city || locationCity,
-        state: accountReq?.state || locationState,
-        pincode: accountReq?.pincode || pincode,
-        dob: accountReq?.dateOfBirth,
-        gender: accountReq?.gender,
-        notificationConsent: 1,
-        is_sms_enable: terms ? 1 : 0,
-        appHash: appHash,
-      };
-      console.log('obj==1==1=', obj);
+          const response = await fetch(geocodeUrl);
+          const data = await response.json();
 
-      dispatch(checkUserApi(obj)).then(response => {
-        if (response?.success) {
-          console.log('responseresponse', response);
-          // navigation.navigate('OtpScreen', {registerObj: obj});
-          methodApi(response);
+          if (data.status === 'OK' && data.results && data.results.length > 0) {
+            // Find postal_code in address_components
+            for (const result of data.results) {
+              if (result.address_components) {
+                for (const component of result.address_components) {
+                  if (component.types.includes('postal_code')) {
+                    const fetchedPincode = component.long_name;
+                    console.log('Pincode found:', fetchedPincode);
+                    setPincode(fetchedPincode);
+                    methodSetupAccountRequest('pincode', fetchedPincode);
+                    return fetchedPincode;
+                  }
+                }
+              }
+            }
+          }
+          console.log('Pincode not found in geocoding response');
+          return null;
+        } catch (error) {
+          console.error('Error fetching pincode:', error);
+          return null;
         }
+      };
+
+      // Fetch pincode and then proceed with form submission
+      fetchPincode().then(fetchedPincode => {
+        let dic = {...accountReq};
+        delete dic.validators;
+
+        let obj = {
+          fullName: accountReq?.fullName,
+          email: accountReq?.email,
+          mobile: accountReq?.mobile,
+          referCode: accountReq?.referCode,
+          current_location: accountReq?.current_location,
+          lat: accountReq?.lat || lat,
+          lng: accountReq?.lng || lng,
+          city: accountReq?.city || locationCity,
+          state: accountReq?.state || locationState,
+          pincode: fetchedPincode || accountReq?.pincode || pincode,
+          dob: accountReq?.dateOfBirth,
+          gender: accountReq?.gender,
+          notificationConsent: 1,
+          is_sms_enable: terms ? 1 : 0,
+          appHash: appHash,
+        };
+        console.log('obj==1==1=', obj);
+
+        dispatch(checkUserApi(obj)).then(response => {
+          if (response?.success) {
+            console.log('responseresponse', response);
+            // navigation.navigate('OtpScreen', {registerObj: obj});
+            methodApi(response);
+          }
+        });
       });
     }
   };
@@ -264,6 +302,30 @@ const Register = ({navigation, route}) => {
       console.log(`Updated accountReq.${key}:`, dic[key]);
       return dic;
     });
+  };
+
+  // Format date input as DD/MM/YYYY
+  const formatDateInput = text => {
+    // Remove all non-numeric characters
+    const cleaned = text.replace(/[^\d]/g, '');
+
+    let formatted = cleaned;
+
+    // Add slash after day (2 digits)
+    if (cleaned.length > 2 && cleaned.length <= 4) {
+      formatted = cleaned.slice(0, 2) + '/' + cleaned.slice(2);
+    }
+    // Add slash after month (4 digits) and limit to 8 digits (DD/MM/YYYY)
+    else if (cleaned.length > 4) {
+      formatted =
+        cleaned.slice(0, 2) +
+        '/' +
+        cleaned.slice(2, 4) +
+        '/' +
+        cleaned.slice(4, 8);
+    }
+
+    return formatted;
   };
 
   // Handle date selection
@@ -555,38 +617,78 @@ const Register = ({navigation, route}) => {
   */
 
   const sendOtp = async () => {
-    dispatch(loadingShow(true));
-    let obj = {
-      fullName: accountReq?.fullName,
-      email: accountReq?.email,
-      mobile: accountReq?.mobile,
-      referCode: accountReq?.referCode,
-      current_location: accountReq?.current_location,
-      lat: accountReq?.lat || lat,
-      lng: accountReq?.lng || lng,
-      city: accountReq?.city || locationCity,
-      state: accountReq?.state || locationState,
-      pincode: accountReq?.pincode || pincode,
-      dob: accountReq?.dateOfBirth,
-      gender: accountReq?.gender,
-      notificationConsent: 1,
-      is_sms_enable: terms ? 1 : 0,
-      appHash: appHash,
-    };
-    console.log('obj-=-=-=-=--=', obj);
-    dispatch(checkUserApi(obj)).then(response => {
-      dispatch(loadingShow(false));
-      console.log('responseresponse', response);
+    let lati = accountReq?.lat || lat;
+    let longi = accountReq?.lng || lng;
 
-      if (response?.success) {
-        setRotp(response.userData); // Store the OTP received from server (if your server returns it)
-        setTimer(30); // Reset timer for resend
-        setIsOtpSent(true); // Ensure OTP section is visible
-        setotp(['', '', '', '']); // Clear previous OTP digits
-        dispatch(loadingShow(false));
-      } else {
-        dispatch(loadingShow(false));
+    // Fetch pincode from Google Geocoding API
+    const fetchPincode = async () => {
+      try {
+        const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lati},${longi}&key=AIzaSyDqBEtr9Djdq0b9NTCMmquSrKiPCCv384o`;
+        console.log('Fetching pincode from:', geocodeUrl);
+
+        const response = await fetch(geocodeUrl);
+        const data = await response.json();
+
+        if (data.status === 'OK' && data.results && data.results.length > 0) {
+          // Find postal_code in address_components
+          for (const result of data.results) {
+            if (result.address_components) {
+              for (const component of result.address_components) {
+                if (component.types.includes('postal_code')) {
+                  const fetchedPincode = component.long_name;
+                  console.log('Pincode found:', fetchedPincode);
+                  setPincode(fetchedPincode);
+                  methodSetupAccountRequest('pincode', fetchedPincode);
+                  return fetchedPincode;
+                }
+              }
+            }
+          }
+        }
+        console.log('Pincode not found in geocoding response');
+        return null;
+      } catch (error) {
+        console.error('Error fetching pincode:', error);
+        return null;
       }
+    };
+
+    dispatch(loadingShow(true));
+
+    // Fetch pincode and then proceed with OTP sending
+    fetchPincode().then(fetchedPincode => {
+      let obj = {
+        fullName: accountReq?.fullName,
+        email: accountReq?.email,
+        mobile: accountReq?.mobile,
+        referCode: accountReq?.referCode,
+        current_location: accountReq?.current_location,
+        lat: accountReq?.lat || lat,
+        lng: accountReq?.lng || lng,
+        city: accountReq?.city || locationCity,
+        state: accountReq?.state || locationState,
+        pincode: fetchedPincode || accountReq?.pincode || pincode,
+        dob: accountReq?.dateOfBirth,
+        gender: accountReq?.gender,
+        notificationConsent: 1,
+        is_sms_enable: terms ? 1 : 0,
+        appHash: appHash,
+      };
+      console.log('obj-=-=-=-=--=', obj);
+      dispatch(checkUserApi(obj)).then(response => {
+        dispatch(loadingShow(false));
+        console.log('responseresponse', response);
+
+        if (response?.success) {
+          setRotp(response.userData); // Store the OTP received from server (if your server returns it)
+          setTimer(30); // Reset timer for resend
+          setIsOtpSent(true); // Ensure OTP section is visible
+          setotp(['', '', '', '']); // Clear previous OTP digits
+          dispatch(loadingShow(false));
+        } else {
+          dispatch(loadingShow(false));
+        }
+      });
     });
     // try {
     //   const ResData = await fetch(
@@ -702,25 +804,29 @@ const Register = ({navigation, route}) => {
         enableOnAndroid={true}
         extraScrollHeight={20}>
         <View style={styles.container}>
-          <View style={styles.topButtonsContainer}>
-            <View style={styles.needHelpContainer}>
-              <Pressable
-                hitSlop={10}
-                onPress={handleNeedHelp}
-                style={styles.needHelpButton}>
-                <Text style={styles.needHelpText}>Need Help?</Text>
-              </Pressable>
+          {!isOtpSent ? (
+            <View style={styles.topButtonsContainer}>
+              <View style={styles.needHelpContainer}>
+                <Pressable
+                  hitSlop={10}
+                  onPress={handleNeedHelp}
+                  style={styles.needHelpButton}>
+                  <Text style={styles.needHelpText}>Need Help?</Text>
+                </Pressable>
+              </View>
+              <View style={styles.videoHelpContainer}>
+                <Pressable
+                  hitSlop={10}
+                  onPress={handleShowVideo}
+                  style={styles.videoHelpButton}>
+                  <Icon name="play-circle-outline" size={20} color="#FF8D53" />
+                  <Text style={styles.videoHelpText}>Watch Tutorial</Text>
+                </Pressable>
+              </View>
             </View>
-            <View style={styles.videoHelpContainer}>
-              <Pressable
-                hitSlop={10}
-                onPress={handleShowVideo}
-                style={styles.videoHelpButton}>
-                <Icon name="play-circle-outline" size={20} color="#FF8D53" />
-                <Text style={styles.videoHelpText}>Watch Tutorial</Text>
-              </Pressable>
-            </View>
-          </View>
+          ) : (
+            <View />
+          )}
           {!isOtpSent && (
             <View style={{alignItems: 'center', padding: 36}}>
               <StepIndicator1 />
@@ -830,7 +936,7 @@ const Register = ({navigation, route}) => {
                   </View>
 
                   {/* Date of Birth Field */}
-                  <View style={styles.fieldContainer}>
+                  {/* <View style={styles.fieldContainer}>
                     <Pressable
                       style={styles.dateInput}
                       onPress={() => {
@@ -861,8 +967,35 @@ const Register = ({navigation, route}) => {
                         {accountReq.validators.dateOfBirth.error}
                       </Text>
                     ) : null}
+                  </View> */}
+                  {/* Date of Birth Field */}
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.label}>Date of Birth</Text>
+                    <TextInput
+                      style={styles.dateInputTextInput}
+                      placeholder="DD/MM/YYYY"
+                      placeholderTextColor="#BABFC7"
+                      value={
+                        accountReq?.dateOfBirth ? accountReq?.dateOfBirth : ''
+                      }
+                      onChangeText={value => {
+                        const formatted = formatDateInput(value);
+                        methodSetupAccountRequest('dateOfBirth', formatted);
+                      }}
+                      keyboardType="numeric"
+                      maxLength={10}
+                      onFocus={() => {
+                        setFocusedInput('dateOfBirth');
+                        setLocationSelected(true); // Prevent location suggestions
+                      }}
+                      onBlur={() => setFocusedInput(null)}
+                    />
+                    {accountReq.validators.dateOfBirth.error ? (
+                      <Text style={styles.errorText}>
+                        {accountReq.validators.dateOfBirth.error}
+                      </Text>
+                    ) : null}
                   </View>
-
                   {/* Gender Selection Field */}
                   <View style={styles.fieldContainer}>
                     <Text style={styles.label}>Gender</Text>
@@ -1590,6 +1723,21 @@ const styles = StyleSheet.create({
   },
   datePlaceholder: {
     color: '#BABFC7',
+  },
+  dateInputTextInput: {
+    borderRadius: 10,
+    alignSelf: 'center',
+    marginHorizontal: 1,
+    height: 55,
+    backgroundColor: 'white',
+    paddingHorizontal: 18,
+    marginVertical: 5,
+    borderColor: '#C7CACB',
+    borderWidth: 1,
+    fontSize: 16,
+    color: '#000',
+    fontFamily: fonts.Montserrat_Regular,
+    width: '100%',
   },
   genderGroup: {
     flexDirection: 'row',

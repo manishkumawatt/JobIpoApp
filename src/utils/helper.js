@@ -26,6 +26,13 @@ import {removeItemValue, setData} from '../appRedux/apis/keyChain';
 // import base64 from "react-native-base64";
 import Geolocation from '@react-native-community/geolocation';
 import {handleSetRoot} from '../navigation/navigationService';
+import {
+  check,
+  openSettings,
+  PERMISSIONS,
+  request,
+} from 'react-native-permissions';
+import {permissionConfirm} from './alertController';
 // import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 
 export const loaderRef = ref => {
@@ -137,7 +144,100 @@ export const appLog = (type, data) => {
     // // console.log(`${type}------------->`, data ? data : '');
   }
 };
+export function requestLocationPermission(alert, cb) {
+  check(
+    Platform.select({
+      android: PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION,
+      ios: PERMISSIONS.IOS.LOCATION_WHEN_IN_USE,
+    }),
+  ).then(async result => {
+    if (result === 'granted') {
+      cb(result);
+      return;
+    }
+    if (result === 'blocked' || result === 'unavailable') {
+      if (alert === 1 || alert == 2 || alert == 4 || alert == 5) {
+        if (alert == 2) {
+          cb(result);
+          return;
+        }
+        permissionConfirm(
+          'Jobipo requests your permission to access your location to show you posts nearby.',
+          status => {
+            if (status) {
+              openSettings().catch(() => {
+                // console.warn('cannot open settings');
+              });
+            } else {
+              cb(result);
+            }
+          },
+        );
+        return;
+      }
+    }
+    request(
+      Platform.select({
+        android: PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION,
+        ios: PERMISSIONS.IOS.LOCATION_WHEN_IN_USE,
+      }),
+    ).then(status => {
+      if (status === 'granted') {
+        cb(status);
+      } else {
+        if (status === 'blocked' || status === 'unavailable') {
+          if (alert === 1 || alert == 4 || alert == 5) {
+            permissionConfirm(
+              'Jobipo requests your permission to access your location to show you posts nearby.',
+              status => {
+                if (status) {
+                  openSettings().catch(() => {
+                    // console.warn('cannot open settings');
+                  });
+                } else {
+                  cb(status);
+                }
+              },
+            );
+            return;
+          } else {
+            cb(status);
+          }
+        } else {
+          cb('');
+        }
+      }
+    });
+  });
+}
+export async function getLocationFetch(alert, cb) {
+  // const hasPermission = await requestLocationPermission(alert,cb);
 
+  requestLocationPermission(alert, hasPermission => {
+    console.log('hasPermission-----', hasPermission);
+    if (hasPermission != 'granted') {
+      cb('');
+    } else {
+      Geolocation.getCurrentPosition(
+        position => {
+          console.log('position-----', position);
+          cb(position?.coords);
+        },
+        error => {
+          console.log('error-----', error);
+          cb('');
+        },
+        {
+          // distanceFilter: 20,
+          enableHighAccuracy: true, // Fast and accurate GPS
+          // forceRequestLocation: true, // Forces location request
+          // timeout: 10000, // Time to wait before failing
+          // maximumAge: 5000, // Cache location for fast retrieval
+        },
+      );
+    }
+  });
+}
 export const getCurrentLocation = () =>
   new Promise((resolve, reject) => {
     Geolocation.getCurrentPosition(

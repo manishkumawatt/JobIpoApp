@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback} from 'react';
+import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,9 @@ import {
   TouchableOpacity,
   FlatList,
   Platform,
+  Dimensions,
+  Modal,
+  Image,
 } from 'react-native';
 import JobMenu from '../../components/Job/JobMenu';
 import IconA from 'react-native-vector-icons/MaterialIcons';
@@ -35,6 +38,7 @@ import fonts from '../../theme/fonts';
 import Pdf from 'react-native-pdf';
 import {pick, types} from '@react-native-documents/picker';
 import {permissionConfirm} from '../../utils/alertController';
+import RNFS from '@exodus/react-native-fs';
 import {
   check,
   openSettings,
@@ -42,15 +46,19 @@ import {
   request,
   RESULTS,
 } from 'react-native-permissions';
+import imagePath from '../../theme/imagePath';
 
 const JobProfile = () => {
   const [focusedInput, setFocusedInput] = useState(null);
   const [locationSelected, setLocationSelected] = useState(false);
   const [cv, setCV] = useState('');
+  const [cvPdf, setCvPdf] = useState('');
   const [pdfLoadError, setPdfLoadError] = useState(false);
   const [fileUri, setFileUri] = useState(null);
   const [fileType, setFileType] = useState('');
   const [fileName, setFileName] = useState('');
+  const [isImageFile, setIsImageFile] = useState(false);
+  const [isPdfFile, setIsPdfFile] = useState(false);
   const [englishSpeaking, setEnglishSpeaking] = useState('');
   const [preferredLocations, setPreferredLocations] = useState('');
   const [pllat, setPllat] = useState(null);
@@ -92,10 +100,17 @@ const JobProfile = () => {
   const [jobTitles, setJobTitles] = useState([]);
   const [filteredTitles, setFilteredTitles] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showJobTitleModal, setShowJobTitleModal] = useState(false);
+  const [jobTitleSearchText, setJobTitleSearchText] = useState('');
+  const [filteredJobTitles, setFilteredJobTitles] = useState([]);
   const [photo, setPhoto] = useState(null);
   const [profileUserData, setProfileUserData] = useState(null);
   const [profileJobseekerData, setProfileJobseekerData] = useState(null);
   const [jobseekerId, setJobseekerId] = useState('');
+  const locationJustUpdatedRef = useRef(false);
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [imageModalType, setImageModalType] = useState('profile'); // 'profile' or 'cv'
   const navigation = useNavigation();
   const API_BASE_URL = 'https://jobipo.com/api/v3';
   const AUTH_TOKEN = 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6';
@@ -128,6 +143,7 @@ const JobProfile = () => {
 
   // Populate jobseeker data when profileJobseekerData is fetched
   useEffect(() => {
+    console.log('profileJobseekerDatapppq-----', profileJobseekerData);
     if (profileJobseekerData) {
       // Set employment type, work mode, experience level
       if (profileJobseekerData.preferredEmployementType) {
@@ -143,14 +159,8 @@ const JobProfile = () => {
             : profileJobseekerData.experienceLevel,
         );
       }
-      if (
-        profileJobseekerData.preferred_job_Title ||
-        profileJobseekerData.preferredJobTitle
-      ) {
-        setPreferredJobTitle(
-          profileJobseekerData.preferred_job_Title ||
-            profileJobseekerData.preferredJobTitle,
-        );
+      if (profileJobseekerData.jobTitle) {
+        setPreferredJobTitle(profileJobseekerData.jobTitle);
       }
       if (profileJobseekerData.preferredJobIndustry) {
         setPreferredJobIndustry(profileJobseekerData.preferredJobIndustry);
@@ -164,7 +174,10 @@ const JobProfile = () => {
             profileJobseekerData.currentSalary,
         );
       }
-      if (profileJobseekerData.currentLocation) {
+      if (
+        profileJobseekerData.currentLocation &&
+        !locationJustUpdatedRef.current
+      ) {
         setPreferredLocations(profileJobseekerData.currentLocation);
       }
       if (
@@ -202,6 +215,10 @@ const JobProfile = () => {
           education: profileJobseekerData.education,
         }));
       }
+      console.log(
+        'profileJobseekerData.education-=-=-=-=-=',
+        profileJobseekerData.education,
+      );
       if (profileJobseekerData.experience) {
         // Update jobSeekerData if needed
         setExperience(prev => ({
@@ -327,6 +344,18 @@ const JobProfile = () => {
           currentLocation: profileJobseekerData.currentLocation,
         }));
       }
+      console.log('profileJobseekerData.cv', profileJobseekerData.cv);
+      if (profileJobseekerData.cv && profileJobseekerData.cv !== 'undefined') {
+        setCV(profileJobseekerData.cv);
+        // Check if CV is an image file
+        const cvUrl = profileJobseekerData.cv.toLowerCase();
+        const imageExtensions = ['.jpg', '.jpeg', '.png'];
+        const isImage = imageExtensions.some(ext => cvUrl.includes(ext));
+        setIsImageFile(isImage);
+        // Check if CV is a PDF file
+        const isPdf = cvUrl.includes('.pdf');
+        setIsPdfFile(isPdf);
+      }
 
       // Set city, state, pincode from jobseekerData if available
       if (
@@ -367,6 +396,13 @@ const JobProfile = () => {
     fetchJobTitles();
     fetchJobCategories();
   }, []);
+
+  // Update filteredJobTitles when jobTitles changes
+  useEffect(() => {
+    if (showJobTitleModal) {
+      setFilteredJobTitles(jobTitles);
+    }
+  }, [jobTitles, showJobTitleModal]);
   // Fetch skill options
   useFocusEffect(
     useCallback(() => {
@@ -581,6 +617,19 @@ const JobProfile = () => {
   const handleSubmit = async () => {
     console.log('selectedSkills-==-=--=-=', selectedSkills);
 
+    // Generate file name with correct extension based on file type
+    let fileNameD;
+    if (fileName && fileName.includes('.')) {
+      // Preserve the original file extension from the selected file
+      const fileExtension = fileName.split('.').pop()?.toLowerCase();
+      fileNameD = `${new Date().getTime()}.${fileExtension}`;
+    } else if (isImageFile) {
+      // Default to jpg for images if extension not available
+      fileNameD = `${new Date().getTime()}.jpg`;
+    } else {
+      // Default to pdf for documents
+      fileNameD = `${new Date().getTime()}.pdf`;
+    }
     try {
       const userID = await AsyncStorage.getItem('UserID');
 
@@ -596,11 +645,13 @@ const JobProfile = () => {
       submissionData.append('preferredEmployementType', employmentType);
       submissionData.append('workMode', workMode);
       submissionData.append('experienceLevel', experienceLevel);
-      submissionData.append('preferred_job_Title', preferredJobTitle);
+      submissionData.append('jobTitle', preferredJobTitle);
       submissionData.append('preferredJobIndustry', preferredJobIndustry);
       submissionData.append('current_salary', currentSalary);
-      submissionData.append('skills', JSON.stringify(selectedSkills));
-      submissionData.append('preferredLocation', preferredLocations);
+      selectedSkills.forEach(skill => {
+        submissionData.append('skills[]', skill);
+      });
+      submissionData.append('currentLocation', preferredLocations);
       submissionData.append('pllat', pllat);
       submissionData.append('pllng', pllng);
       submissionData.append('englishSpeaking', englishSpeaking);
@@ -621,6 +672,13 @@ const JobProfile = () => {
           uri: photo.uri,
           name: photo.fileName || 'photo.jpg',
           type: photo.type || 'image/jpeg',
+        });
+      }
+      if (cvPdf && cvPdf !== 'undefined') {
+        submissionData.append('cv', {
+          uri: cvPdf,
+          name: fileNameD,
+          type: fileType || 'application/pdf',
         });
       }
       console.log('submissionDatasubmissionData', submissionData);
@@ -660,6 +718,31 @@ const JobProfile = () => {
     } else {
       setShowSuggestions(false);
     }
+  };
+
+  // Handler functions for job title modal
+  const handleJobTitleModalOpen = () => {
+    setJobTitleSearchText('');
+    setFilteredJobTitles(jobTitles);
+    setShowJobTitleModal(true);
+  };
+
+  const handleJobTitleModalSearch = text => {
+    setJobTitleSearchText(text);
+    if (!text.trim()) {
+      setFilteredJobTitles(jobTitles);
+    } else {
+      const filtered = jobTitles.filter(item =>
+        item?.jobTitle?.toLowerCase().includes(text.toLowerCase()),
+      );
+      setFilteredJobTitles(filtered);
+    }
+  };
+
+  const handleJobTitleModalSelect = item => {
+    setPreferredJobTitle(item.jobTitle);
+    setShowJobTitleModal(false);
+    setJobTitleSearchText('');
   };
 
   const makeApiRequest = async (endpoint, options = {}) => {
@@ -708,6 +791,18 @@ const JobProfile = () => {
   // Handle location selection callback from LocationPicker screen
   const handleLocationPickerResult = useCallback(
     (current_location, lat, lng, city, state, pincode, area, selectedState) => {
+      console.log(
+        'current_locationcurrent_locationcurrent_location',
+        current_location,
+      );
+      console.log('latlatlatlat', lat);
+      console.log('lnglnglnglng', lng);
+      console.log('citycitycitycity', city);
+      console.log('statestatestatestate', state);
+      console.log('pincodepincodepincode', pincode);
+      console.log('areaareaareaarea', area);
+      console.log('selectedStateselectedStateselectedState', selectedState);
+      locationJustUpdatedRef.current = true;
       setPreferredLocations(current_location);
       setPllat(lat);
       setPllng(lng);
@@ -723,6 +818,11 @@ const JobProfile = () => {
         city: city,
         pincode: pincode,
       }));
+
+      // Reset the flag after a delay to allow API updates later
+      setTimeout(() => {
+        locationJustUpdatedRef.current = false;
+      }, 2000);
     },
     [handleLocationSelect],
   );
@@ -730,8 +830,8 @@ const JobProfile = () => {
   const pickImage = async () => {
     try {
       const image = await ImagePicker.openPicker({
-        width: 300,
-        height: 300,
+        width: Dimensions.get('window').width,
+        height: Dimensions.get('window').width,
         cropping: true,
         compressImageQuality: 0.8,
         mediaType: 'photo',
@@ -751,14 +851,14 @@ const JobProfile = () => {
         includeExif: true,
         avoidEmptySpaceAroundImage: true,
       });
-
+      console.log('image.path=-=--=--', image.path);
       setPhoto({
         uri: image.path,
         type: image.mime,
         fileName: image.filename,
       });
     } catch (error) {
-      // // console.log('Image pick cancelled or failed:', error);
+      console.log('Image pick cancelled or failed:', error);
     }
   };
   const handleUpload = async (uri, type, name) => {
@@ -781,7 +881,7 @@ const JobProfile = () => {
         name: name,
       });
       resumeFormData.append('userID', userID);
-
+      console.log('resumeFormData-=-=-=-=-', resumeFormData);
       const updateRes = await fetch(`https://jobipo.com/api/v2/resume-upload`, {
         method: 'POST',
         headers: {
@@ -823,7 +923,7 @@ const JobProfile = () => {
     try {
       const res = await pick({
         mode: 'open',
-        type: [types.pdf, types.allFiles],
+        type: [types.pdf, types.images],
         allowMultiSelection: false,
       });
 
@@ -834,30 +934,129 @@ const JobProfile = () => {
         // Validate file type
         const fileName = file.name || '';
         const fileExtension = fileName.split('.').pop()?.toLowerCase();
-        const allowedExtensions = ['pdf', 'doc', 'docx'];
+        const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
+        const imageExtensions = ['jpg', 'jpeg', 'png'];
 
         if (!allowedExtensions.includes(fileExtension)) {
           showToastMessage(
-            'Please select PDF, Doc or Docx files only',
+            'Please select PDF, JPG, JPEG or PNG files only',
             'danger',
           );
           return;
         }
 
+        // Check if it's an image file
+        const isImage = imageExtensions.includes(fileExtension);
+        setIsImageFile(isImage);
+        // Check if it's a PDF file (for preview purposes)
+        const isPdf = fileExtension === 'pdf';
+        setIsPdfFile(isPdf);
+
         // Store file information in state
-        const fileUri = file.uri || file.path || file.fileCopyUri;
+        // Prioritize fileCopyUri as it's already a file URI (document picker provides this)
+        let fileUri = file.fileCopyUri || file.uri || file.path;
         const fileType = file.type || file.mime || 'application/pdf';
+
+        console.log('Original file URI:', fileUri);
+        console.log('fileCopyUri:', file.fileCopyUri);
+        console.log('file.uri:', file.uri);
+        console.log('File object:', JSON.stringify(file, null, 2));
+
+        // Handle Android content URIs - convert to file URI for PDF/image preview
+        // PDF component requires file:// URIs, not content:// URIs
+        if (Platform.OS === 'android' && fileUri) {
+          // If we already have a file:// URI, use it directly
+          if (fileUri.startsWith('file://')) {
+            console.log('Using existing file:// URI:', fileUri);
+          } else if (fileUri.startsWith('content://')) {
+            // Need to convert content:// URI to file:// URI
+            try {
+              console.log('Converting content:// URI to file:// URI');
+              // Create a temporary file path
+              const tempFileName = `resume_${Date.now()}.${fileExtension}`;
+              const tempFilePath = `${RNFS.CachesDirectoryPath}/${tempFileName}`;
+
+              // Read file from content URI and write to temporary location
+              // Use base64 encoding for binary files like PDFs and images
+              const fileData = await RNFS.readFile(fileUri, 'base64');
+              await RNFS.writeFile(tempFilePath, fileData, 'base64');
+
+              // Verify file was written
+              const fileExists = await RNFS.exists(tempFilePath);
+              if (!fileExists) {
+                throw new Error('File was not written successfully');
+              }
+
+              // Use the file:// URI for preview
+              fileUri = `file://${tempFilePath}`;
+              console.log(
+                'Successfully converted content URI to file URI:',
+                fileUri,
+              );
+            } catch (copyError) {
+              console.error('Error copying file from content URI:', copyError);
+              // Try fileCopyUri as fallback if it's a file URI
+              if (file.fileCopyUri && file.fileCopyUri.startsWith('file://')) {
+                fileUri = file.fileCopyUri;
+                console.log('Using fileCopyUri as fallback:', fileUri);
+              } else {
+                // If conversion fails, show error and don't proceed
+                console.error(
+                  'Failed to convert content URI and no valid fallback available',
+                );
+                showToastMessage(
+                  'Error processing file. Please try selecting the file again.',
+                  'danger',
+                );
+                setPdfLoadError(true);
+                return;
+              }
+            }
+          } else {
+            // Unknown URI format - try to use fileCopyUri if available
+            console.warn('Unknown URI format:', fileUri);
+            if (file.fileCopyUri && file.fileCopyUri.startsWith('file://')) {
+              fileUri = file.fileCopyUri;
+              console.log('Using fileCopyUri for unknown URI format:', fileUri);
+            } else {
+              showToastMessage(
+                'Invalid file format. Please try selecting the file again.',
+                'danger',
+              );
+              setPdfLoadError(true);
+              return;
+            }
+          }
+        }
+
+        // Ensure file URI is valid before setting
+        if (
+          !fileUri ||
+          (!fileUri.startsWith('file://') &&
+            !fileUri.startsWith('http') &&
+            !fileUri.startsWith('https'))
+        ) {
+          showToastMessage(
+            'Invalid file URI. Please try selecting the file again.',
+            'danger',
+          );
+          setPdfLoadError(true);
+          return;
+        }
 
         setFileUri(fileUri);
         setFileType(fileType);
         setFileName(fileName);
-
+        console.log('fileUri-d=-=-=-=-', file);
+        setCvPdf(fileUri);
+        setCV(fileUri); // Set CV for preview
+        setPdfLoadError(false); // Reset error state for new file
         // Automatically upload after selection
-        await handleUpload(fileUri, fileType, fileName);
+        // await handleUpload(fileUri, fileType, fileName);
       }
     } catch (err) {
       if (err?.message !== 'User canceled document picker') {
-        showToastMessage('Error selecting file', 'danger');
+        // showToastMessage('Error selecting file', 'danger');
       }
     }
   };
@@ -944,7 +1143,11 @@ const JobProfile = () => {
   const handleSelectResume = async () => {
     methodForPermission('gallery');
   };
-  console.log('profileUserData?.photo-=-=-=-=-', profileUserData?.photo);
+  console.log(
+    'profileUserData?.photo-=-=-=-=-',
+    profileUserData?.photo,
+    photo?.uri,
+  );
   return (
     <>
       {/* <JobHeader /> */}
@@ -958,14 +1161,38 @@ const JobProfile = () => {
           <View style={styles.profileSection}>
             <View style={styles.profileHeader}>
               <View style={styles.profileImageWrapper}>
-                <ImageLoadView
-                  resizeMode="cover"
-                  source={{
-                    uri:
-                      photo?.uri || profileUserData?.photo || formData?.photo,
+                <TouchableOpacity
+                  onPress={() => {
+                    const imageUri =
+                      photo?.uri || profileUserData?.photo || formData?.photo;
+                    // Only show modal if there's an actual image URI (not default placeholder)
+                    if (
+                      imageUri &&
+                      typeof imageUri === 'string' &&
+                      (imageUri.startsWith('http') ||
+                        imageUri.startsWith('file://') ||
+                        imageUri.startsWith('content://'))
+                    ) {
+                      setImageModalType('profile');
+                      setShowImageModal(true);
+                    }
                   }}
-                  style={styles.profileImage}
-                />
+                  activeOpacity={0.8}>
+                  <ImageLoadView
+                    resizeMode="cover"
+                    source={
+                      photo?.uri || profileUserData?.photo || formData?.photo
+                        ? {
+                            uri:
+                              photo?.uri ||
+                              profileUserData?.photo ||
+                              formData?.photo,
+                          }
+                        : imagePath.user
+                    }
+                    style={styles.profileImage}
+                  />
+                </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.svgBadge}
                   onPress={() => pickImage()}>
@@ -1169,33 +1396,19 @@ const JobProfile = () => {
               </View>
 
               <Text style={styles.label}>Preferred Job Title</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter Job Title"
-                placeholderTextColor="#D0D0D0"
-                value={preferredJobTitle}
-                onChangeText={handleJobChange}
-                onFocus={() => {
-                  setFocusedInput('jobTitle');
-                  setLocationSelected(true); // Prevent location suggestions
-                }}
-                onBlur={() => setFocusedInput(null)}
-              />
-
-              {showSuggestions && filteredTitles.length > 0 && (
-                <ScrollView
-                  keyboardShouldPersistTaps="handled"
-                  style={styles.suggestionBox}>
-                  {filteredTitles.map((item, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.suggestionItem}
-                      onPress={() => handleSuggestionSelect(item)}>
-                      <Text>{item.jobTitle}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
+              <TouchableOpacity
+                style={styles.jobTitleInput}
+                onPress={handleJobTitleModalOpen}>
+                <Text
+                  style={[
+                    preferredJobTitle
+                      ? styles.inputText
+                      : styles.placeholderText,
+                  ]}>
+                  {preferredJobTitle || 'Select Job Title'}
+                </Text>
+                <Icon name="arrow-drop-down" size={24} color="#535353" />
+              </TouchableOpacity>
 
               <Text style={styles.label}>Preferred Job Industry</Text>
               <View style={styles.pickerWrapper}>
@@ -1436,6 +1649,7 @@ const JobProfile = () => {
                       profileJobseekerData: profileJobseekerData,
                       data: null,
                       addNew: true,
+                      jobseekerId: jobseekerId,
                     });
                   }}>
                   <Text style={styles.addButtonText}>+ Add</Text>
@@ -1471,7 +1685,7 @@ const JobProfile = () => {
                         <Text style={styles.companyName}>
                           {item?.collegeName
                             ? item.collegeName
-                            : 'College Name  Not Mentioned'}
+                            : 'Institute Name  Not Mentioned'}
                         </Text>
 
                         <View style={styles.section}>
@@ -1489,6 +1703,7 @@ const JobProfile = () => {
                             profileJobseekerData: profileJobseekerData,
                             data: item,
                             index,
+                            jobseekerId: jobseekerId,
                           })
                         }>
                         <IconA name="edit" size={12} color="#FF8D53" />
@@ -1523,6 +1738,8 @@ const JobProfile = () => {
                       experience: experience,
                       profileJobseekerData: profileJobseekerData,
                       data: null,
+                      addNew: true,
+                      jobseekerId: jobseekerId,
                     })
                   }>
                   <Text style={styles.addButtonText}>+ Add</Text>
@@ -1569,6 +1786,7 @@ const JobProfile = () => {
                                 profileJobseekerData: profileJobseekerData,
                                 data: item,
                                 index,
+                                jobseekerId: jobseekerId,
                               })
                             }>
                             <IconA name="edit" size={12} color="#FF8D53" />
@@ -1609,9 +1827,48 @@ const JobProfile = () => {
           <View style={styles.resumecontainer}>
             {cv ? (
               <>
-                {/* PDF Preview - Half Visible */}
-                <View style={styles.pdfPreviewContainer}>
-                  {!pdfLoadError && cv ? (
+                {/* File Preview - PDF or Image */}
+                <TouchableOpacity
+                  style={styles.pdfPreviewContainer}
+                  onPress={() => {
+                    if (cv) {
+                      // Check if cv is an image URL or file
+                      const isImageUrl =
+                        isImageFile ||
+                        (cv &&
+                          (cv.includes('.jpg') ||
+                            cv.includes('.jpeg') ||
+                            cv.includes('.png')));
+
+                      // Check if cv is a PDF URL or file
+                      const isPdfUrl =
+                        isPdfFile ||
+                        (cv &&
+                          (cv.includes('.pdf') ||
+                            cv.toLowerCase().includes('pdf')));
+
+                      if (isImageUrl) {
+                        setImageModalType('cv');
+                        setShowImageModal(true);
+                      } else if (isPdfUrl || cv) {
+                        // Open PDF modal for PDFs or any other file type
+                        setShowPdfModal(true);
+                      }
+                    }
+                  }}
+                  activeOpacity={0.8}>
+                  {isImageFile && cv ? (
+                    <Image
+                      source={{uri: cv}}
+                      style={styles.pdfPreview}
+                      resizeMode="cover"
+                    />
+                  ) : (isPdfFile || cv?.includes('.pdf')) &&
+                    !pdfLoadError &&
+                    cv &&
+                    (cv.startsWith('file://') ||
+                      cv.startsWith('http://') ||
+                      cv.startsWith('https://')) ? (
                     <Pdf
                       source={{uri: cv, cache: true}}
                       style={styles.pdfPreview}
@@ -1634,12 +1891,11 @@ const JobProfile = () => {
                     />
                   ) : (
                     <View style={styles.pdfErrorContainer}>
-                      <Icon name="picture-as-pdf" size={48} color="#FF8D53" />
-                      {/* <Text style={styles.pdfErrorText}>Resume Uploaded</Text> */}
-                      <Text style={styles.pdfErrorSubText}>Tap to update</Text>
+                      <Icon name="description" size={48} color="#FF8D53" />
+                      <Text style={styles.pdfErrorSubText}>Tap to view</Text>
                     </View>
                   )}
-                </View>
+                </TouchableOpacity>
                 {/* Update Resume Button */}
                 <TouchableOpacity
                   style={styles.updateResumeButton}
@@ -1662,15 +1918,16 @@ const JobProfile = () => {
                 </View>
                 {/* Info Text */}
                 <Text style={styles.infoText}>
-                  Upload PDF, Doc or Docx files only
+                  Upload PDF, JPG, JPEG or PNG files
                 </Text>
                 <Text style={styles.infoText}>Maximum file size 5MB</Text>
 
                 {/* Upload Button */}
                 <TouchableOpacity
                   style={styles.uploadBox}
-                  onPress={() =>
-                    navigation.navigate('ResumeUpload', jobSeekerData)
+                  onPress={
+                    () => handleSelectResume()
+                    // navigation.navigate('ResumeUpload', jobSeekerData)
                   }>
                   <Text style={styles.uploadText}>+ Add your resume</Text>
                 </TouchableOpacity>
@@ -1727,6 +1984,165 @@ const JobProfile = () => {
           buttonColor={'#0095FF'}
         />
       )}
+
+      {/* Fullscreen PDF Modal */}
+      <Modal
+        visible={showPdfModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowPdfModal(false)}>
+        <View style={styles.fullscreenModal}>
+          <View style={styles.fullscreenHeader}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowPdfModal(false)}>
+              <Icon name="close" size={28} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.fullscreenContent}>
+            {cv &&
+            (isImageFile ||
+              cv.includes('.jpg') ||
+              cv.includes('.jpeg') ||
+              cv.includes('.png')) ? (
+              <Image
+                source={{uri: cv}}
+                style={styles.fullscreenImage}
+                resizeMode="contain"
+              />
+            ) : cv &&
+              (isPdfFile ||
+                cv.includes('.pdf') ||
+                cv.startsWith('file://') ||
+                cv.startsWith('http://') ||
+                cv.startsWith('https://')) ? (
+              <Pdf
+                source={{uri: cv, cache: true}}
+                style={styles.fullscreenPdf}
+                trustAllCerts={false}
+                enablePaging={true}
+                horizontal={false}
+                fitPolicy={0}
+                onError={error => {
+                  console.log('PDF Error:', error);
+                  showToastMessage('Failed to load PDF', 'danger');
+                  setShowPdfModal(false);
+                }}
+              />
+            ) : (
+              <View style={styles.fullscreenContent}>
+                <Text style={{color: '#fff', textAlign: 'center'}}>
+                  Unable to display file
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Job Title Selection Modal */}
+      <Modal
+        visible={showJobTitleModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowJobTitleModal(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowJobTitleModal(false)}>
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={e => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Job Title</Text>
+              <TouchableOpacity onPress={() => setShowJobTitleModal(false)}>
+                <Icon name="close" size={24} color="#535353" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalSearchContainer}>
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Search Job Title"
+                placeholderTextColor="#BABFC7"
+                value={jobTitleSearchText}
+                onChangeText={handleJobTitleModalSearch}
+                autoFocus={true}
+              />
+              <Icon name="search" size={24} color="#535353" />
+            </View>
+            <ScrollView style={styles.modalOptions}>
+              {filteredJobTitles.length > 0 ? (
+                filteredJobTitles.map((item, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.modalOption,
+                      preferredJobTitle === item.jobTitle &&
+                        styles.modalOptionSelected,
+                    ]}
+                    onPress={() => handleJobTitleModalSelect(item)}>
+                    <Text
+                      style={[
+                        styles.modalOptionText,
+                        preferredJobTitle === item.jobTitle &&
+                          styles.modalOptionTextSelected,
+                      ]}>
+                      {item.jobTitle}
+                    </Text>
+                    {preferredJobTitle === item.jobTitle && (
+                      <Icon name="check" size={20} color="#FF8D53" />
+                    )}
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View style={styles.noResultsContainer}>
+                  <Text style={styles.noResultsText}>No job titles found</Text>
+                </View>
+              )}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Fullscreen Image Modal */}
+      <Modal
+        visible={showImageModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowImageModal(false)}>
+        <View style={styles.fullscreenModal}>
+          <View style={styles.fullscreenHeader}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowImageModal(false)}>
+              <Icon name="close" size={28} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.fullscreenContent}>
+            {imageModalType === 'cv' && cv ? (
+              <Image
+                source={{uri: cv}}
+                style={styles.fullscreenImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <Image
+                source={{
+                  uri:
+                    photo?.uri ||
+                    profileUserData?.photo ||
+                    formData?.photo ||
+                    imagePath.user,
+                }}
+                style={styles.fullscreenImage}
+                resizeMode="contain"
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
       <JobMenu />
     </>
   );
@@ -1921,13 +2337,111 @@ const styles = StyleSheet.create({
     margin: 5,
     marginBottom: 20,
   },
+  suggestionBoxContainer: {
+    zIndex: 1000,
+    elevation: 5,
+  },
   suggestionBox: {
     backgroundColor: '#fff',
     padding: 16,
     borderRadius: 10,
+    maxHeight: 300,
     // margin: 5,
     // marginBottom: 20,
-    maxHeight: 300,
+  },
+  jobTitleInput: {
+    paddingLeft: 8,
+    paddingRight: 12,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: 10,
+    paddingVertical: 10,
+    // borderWidth: 1,
+    // borderColor: '#D0D0D0',
+  },
+  inputText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+  placeholderText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#D0D0D0',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    width: '90%',
+    maxHeight: '80%',
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#535353',
+  },
+  modalSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F4FD',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  modalSearchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#333',
+  },
+  modalOptions: {
+    maxHeight: 400,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  modalOptionSelected: {
+    backgroundColor: '#FFF5F0',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  modalOptionTextSelected: {
+    color: '#FF8D53',
+    fontWeight: '500',
+  },
+  noResultsContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  noResultsText: {
+    fontSize: 16,
+    color: '#999',
   },
   PrefrredjobDetails: {
     paddingBottom: 10,
@@ -2472,6 +2986,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     marginTop: 2,
     fontFamily: fonts.Montserrat_Regular,
+  },
+  fullscreenModal: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+  },
+  fullscreenHeader: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 20,
+    right: 20,
+    zIndex: 1000,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenPdf: {
+    flex: 1,
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height,
+  },
+  fullscreenImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height,
   },
 });
 

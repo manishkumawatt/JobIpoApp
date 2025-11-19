@@ -11,6 +11,7 @@ import {
   InteractionManager,
   Modal,
   TextInput,
+  Alert,
 } from 'react-native';
 import {CommonTextInputs, KeyboardScroll} from '../../component';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -18,11 +19,13 @@ import {showToastMessage} from '../../utils/Toast';
 import {loadingShow} from '../../appRedux/actions/loadingAction';
 import {useDispatch} from 'react-redux';
 import fonts from '../../theme/fonts';
-import Geolocation from '@react-native-community/geolocation';
+import Geolocation from 'react-native-geolocation-service';
 import {Platform} from 'react-native';
 import {check, request, PERMISSIONS, RESULTS} from 'react-native-permissions';
 import {useFocusEffect} from '@react-navigation/native';
 import PlacesAutocomplete from '../../components/PlacesAutocomplete';
+import {isLocationEnabled} from 'react-native-device-info';
+import {getLocationFetch} from '../../utils/helper';
 
 const LocationPicker = ({navigation, route}) => {
   const dispatch = useDispatch();
@@ -194,11 +197,10 @@ const LocationPicker = ({navigation, route}) => {
               }
             }
 
-            // Get current position
             Geolocation.getCurrentPosition(
               async position => {
+                console.log('position---dd--', position);
                 const {latitude, longitude} = position.coords;
-
                 // Reverse geocode to get address
                 try {
                   const response = await fetch(
@@ -273,9 +275,9 @@ const LocationPicker = ({navigation, route}) => {
                         areaName, // area
                       );
                       // Navigate back after setting data
-                      setTimeout(() => {
-                        navigation.goBack();
-                      }, 500);
+                      // setTimeout(() => {
+                      //   navigation.goBack();
+                      // }, 500);
                     }
 
                     showToastMessage(
@@ -297,20 +299,134 @@ const LocationPicker = ({navigation, route}) => {
                 }
               },
               error => {
-                console.log('Location error:', error);
-                showToastMessage(
-                  'Unable to get your current location',
-                  'danger',
-                );
-                setIsGettingLocation(false);
-                dispatch(loadingShow(false));
+                console.log('error-----', error);
               },
               {
-                enableHighAccuracy: true,
-                timeout: 15000,
-                maximumAge: 10000,
+                // distanceFilter: 20,
+                enableHighAccuracy: true, // Fast and accurate GPS
+                // forceRequestLocation: true, // Forces location request
+                // timeout: 10000, // Time to wait before failing
+                // maximumAge: 5000, // Cache location for fast retrieval
               },
             );
+
+            // // Get current position
+            // Geolocation.getCurrentPosition(
+            //   async position => {
+            //     const {latitude, longitude} = position.coords;
+
+            //     // Reverse geocode to get address
+            //     // try {
+            //     //   const response = await fetch(
+            //     //     `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=AIzaSyDqBEtr9Djdq0b9NTCMmquSrKiPCCv384o`,
+            //     //   );
+            //     //   const data = await response.json();
+
+            //     //   if (data.results && data.results.length > 0) {
+            //     //     const addressComponents =
+            //     //       data.results[0].address_components;
+            //     //     let cityName = '';
+            //     //     let areaName = '';
+
+            //     //     // Extract city
+            //     //     const cityComponent = addressComponents.find(
+            //     //       component =>
+            //     //         component.types.includes('locality') ||
+            //     //         component.types.includes('administrative_area_level_2'),
+            //     //     );
+            //     //     if (cityComponent) {
+            //     //       cityName = cityComponent.long_name;
+            //     //       setCity(cityName);
+            //     //       setSelectedCity(cityName);
+            //     //     }
+
+            //     //     // Extract area/neighborhood
+            //     //     const areaComponent = addressComponents.find(
+            //     //       component =>
+            //     //         component.types.includes('sublocality') ||
+            //     //         component.types.includes('neighborhood') ||
+            //     //         component.types.includes('sublocality_level_1'),
+            //     //     );
+            //     //     if (areaComponent) {
+            //     //       areaName = areaComponent.long_name;
+            //     //       setArea(areaName);
+            //     //     } else {
+            //     //       // Use formatted address as fallback
+            //     //       const formattedAddress =
+            //     //         data.results[0].formatted_address;
+            //     //       const addressParts = formattedAddress.split(',');
+            //     //       if (addressParts.length > 1) {
+            //     //         setArea(addressParts[0]?.trim() || '');
+            //     //       }
+            //     //     }
+
+            //     //     // Extract pincode
+            //     //     const postalCodeComponent = addressComponents.find(
+            //     //       component => component.types.includes('postal_code'),
+            //     //     );
+            //     //     const pincode = postalCodeComponent
+            //     //       ? postalCodeComponent.long_name
+            //     //       : '';
+
+            //     //     // Extract state
+            //     //     const stateComponent = addressComponents.find(component =>
+            //     //       component.types.includes('administrative_area_level_1'),
+            //     //     );
+            //     //     const stateName = stateComponent
+            //     //       ? stateComponent.long_name
+            //     //       : '';
+
+            //     //     // Return location data immediately after GPS fetch
+            //     //     const fullLocation = `${cityName}, ${areaName}`;
+            //     //     if (route?.params?.onLocationSelect) {
+            //     //       route.params.onLocationSelect(
+            //     //         fullLocation, // current_location
+            //     //         latitude, // lat
+            //     //         longitude, // lng
+            //     //         cityName, // city
+            //     //         stateName, // state
+            //     //         pincode, // pincode
+            //     //         areaName, // area
+            //     //       );
+            //     //       // Navigate back after setting data
+            //     //       setTimeout(() => {
+            //     //         navigation.goBack();
+            //     //       }, 500);
+            //     //     }
+
+            //     //     showToastMessage(
+            //     //       'Location fetched successfully',
+            //     //       'success',
+            //     //     );
+            //     //   } else {
+            //     //     showToastMessage(
+            //     //       'Unable to get location details',
+            //     //       'danger',
+            //     //     );
+            //     //   }
+            //     // } catch (geocodeError) {
+            //     //   console.log('Geocode error:', geocodeError);
+            //     //   showToastMessage('Error fetching address details', 'danger');
+            //     // } finally {
+            //     //   setIsGettingLocation(false);
+            //     //   dispatch(loadingShow(false));
+            //     // }
+            //   },
+            //   error => {
+            //     console.log('Location error:', error);
+            //     showToastMessage(
+            //       'Unable to get your current location',
+            //       'danger',
+            //     );
+            //     setIsGettingLocation(false);
+            //     dispatch(loadingShow(false));
+            //   },
+            //   {
+            //     enableHighAccuracy: true,
+            //     timeout: 15000,
+            //     maximumAge: 10000,
+            //   },
+            // );
           } catch (error) {
             console.log('Permission error:', error);
             showToastMessage('Error requesting location permission', 'danger');
@@ -386,7 +502,124 @@ const LocationPicker = ({navigation, route}) => {
     }
     navigation.goBack();
   };
+  // console.log('countryName====', countryName);
+  const methodGPSPermission = () => {
+    if (Platform.OS === 'android') {
+      Alert.alert(
+        'Location Unavailable',
+        'Please enable GPS or set location mode to High Accuracy in settings.',
+        [
+          // { text: "Open Settings", onPress: () => Linking.openSettings() },
+          {text: 'OK', style: 'cancel'},
+        ],
+      );
+    } else {
+      Alert.alert(
+        'Location Unavailable',
+        'Please enable Location Services in iPhone Settings.',
+        [{text: 'OK'}],
+      );
+    }
+  };
+  const methodPermission = async type => {
+    console.log('methodPermission-=-=-=-=-=-=-=-');
+    const checkEnabled = await isLocationEnabled();
+    if (!checkEnabled) {
+      setTimeout(() => {
+        methodGPSPermission();
+      }, 200);
+    } else {
+      getLocationFetch(1, async currentLocationGet => {
+        const {latitude, longitude} = currentLocationGet;
+        console.log('currentLocationGet-=-==-=--=', currentLocationGet);
+        try {
+          const response = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=AIzaSyDqBEtr9Djdq0b9NTCMmquSrKiPCCv384o`,
+          );
+          const data = await response.json();
 
+          if (data.results && data.results.length > 0) {
+            const addressComponents = data.results[0].address_components;
+            let cityName = '';
+            let areaName = '';
+
+            // Extract city
+            const cityComponent = addressComponents.find(
+              component =>
+                component.types.includes('locality') ||
+                component.types.includes('administrative_area_level_2'),
+            );
+            if (cityComponent) {
+              cityName = cityComponent.long_name;
+              setCity(cityName);
+              setSelectedCity(cityName);
+            }
+
+            // Extract area/neighborhood
+            const areaComponent = addressComponents.find(
+              component =>
+                component.types.includes('sublocality') ||
+                component.types.includes('neighborhood') ||
+                component.types.includes('sublocality_level_1'),
+            );
+            if (areaComponent) {
+              areaName = areaComponent.long_name;
+              setArea(areaName);
+            } else {
+              // Use formatted address as fallback
+              const formattedAddress = data.results[0].formatted_address;
+              const addressParts = formattedAddress.split(',');
+              if (addressParts.length > 1) {
+                setArea(addressParts[0]?.trim() || '');
+              }
+            }
+
+            // Extract pincode
+            const postalCodeComponent = addressComponents.find(component =>
+              component.types.includes('postal_code'),
+            );
+            const pincode = postalCodeComponent
+              ? postalCodeComponent.long_name
+              : '';
+
+            // Extract state
+            const stateComponent = addressComponents.find(component =>
+              component.types.includes('administrative_area_level_1'),
+            );
+            const stateName = stateComponent ? stateComponent.long_name : '';
+
+            // Return location data immediately after GPS fetch
+            const fullLocation = `${cityName}, ${areaName}`;
+            if (route?.params?.onLocationSelect) {
+              route.params.onLocationSelect(
+                fullLocation, // current_location
+                latitude, // lat
+                longitude, // lng
+                cityName, // city
+                stateName, // state
+                pincode, // pincode
+                areaName, // area
+              );
+              // Navigate back after setting data
+              setTimeout(() => {
+                navigation.goBack();
+              }, 500);
+            }
+
+            showToastMessage('Location fetched successfully', 'success');
+          } else {
+            showToastMessage('Unable to get location details', 'danger');
+          }
+        } catch (geocodeError) {
+          console.log('Geocode error:', geocodeError);
+          showToastMessage('Error fetching address details', 'danger');
+        } finally {
+          setIsGettingLocation(false);
+          dispatch(loadingShow(false));
+        }
+      });
+    }
+  };
   return (
     <>
       {/* Custom Overlay Modal - Using absolute positioning instead of Modal */}
@@ -505,7 +738,9 @@ const LocationPicker = ({navigation, route}) => {
                 isGettingLocation && styles.currentLocationButtonDisabled,
               ]}
               onPress={handleUseCurrentLocation}
-              disabled={isGettingLocation}>
+              // onPress={() => methodPermission(true)}
+              // disabled={isGettingLocation}
+            >
               {isGettingLocation ? (
                 <ActivityIndicator color="#FF8D53" />
               ) : (
