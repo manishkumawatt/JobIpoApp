@@ -728,37 +728,30 @@ const Myearning = ({navigation}) => {
       leadStatusOverride = null,
     ) => {
       try {
-        if (isRefresh) {
-          setIsRefreshing(true);
-        } else if (append) {
-          setIsLoadingMore(true);
-        } else {
-          setisLoading(true);
-        }
-
-        const formdata = {
-          ProductName:
-            productNameOverride !== null ? productNameOverride : ProductName,
-          LeadStatus:
-            leadStatusOverride !== null ? leadStatusOverride : LeadStatus,
-          page: page,
-          // limit: pageLimit,
-        };
-        console.log('formdata-=-=-=-=-', formdata);
+        const formdata = new FormData();
+        formdata.append(
+          'ProductName',
+          productNameOverride !== null ? productNameOverride : ProductName,
+        );
+        formdata.append(
+          'LeadStatus',
+          leadStatusOverride !== null ? leadStatusOverride : LeadStatus,
+        );
+        formdata.append('page', page.toString());
+        console.log('formdata------', formdata);
         const response = await fetch(
           'https://jobipo.com/api/v3/agent/my-earning',
           {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json',
               Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
             },
-            body: JSON.stringify(formdata),
+            body: formdata,
           },
         );
 
         const sliderDataApi = await response.json();
-        console.log('sliderDataApi-=-=-=-=-', sliderDataApi);
+        // console.log('sliderDataApi-=-=-=-=-', sliderDataApi);
         if (sliderDataApi && sliderDataApi.logout != 1) {
           const parsedData = JSON.parse(sliderDataApi.msg);
 
@@ -797,21 +790,23 @@ const Myearning = ({navigation}) => {
     [ProductName, LeadStatus, signOut],
   );
 
-  // Handle refresh
-  const handleRefresh = useCallback(() => {
-    setCurrentPage(1);
-    setHasMoreData(true);
-    GetDataFunc(1, true, false);
-  }, [GetDataFunc]);
-
-  // Handle load more
-  const handleLoadMore = useCallback(() => {
-    if (!isLoadingMore && hasMoreData && currentPage < totalPages) {
-      const nextPage = currentPage + 1;
-      GetDataFunc(nextPage, false, true);
+  const handleLoadMore = () => {
+    console.log('currentPage------', currentPage);
+    if (!isRefreshing && currentPage != totalPages) {
+      setCurrentPage(currentPage + 1);
+      setIsLoadingMore(true);
+      // setisLoading(true);
+      GetDataFunc(currentPage + 1, false, true);
     }
-  }, [isLoadingMore, hasMoreData, currentPage, totalPages, GetDataFunc]);
-
+  };
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    setCurrentPage(1);
+    GetDataFunc(1, false, false);
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 5000);
+  };
   // useFocusEffect(
   //   React.useCallback(() => {
   //     let isActive = true;
@@ -867,38 +862,38 @@ const Myearning = ({navigation}) => {
         <ActivityIndicator size="large" />
       </View>
       {/* <Header title= 'My Earning' /> */}
-      <ScrollView
+      {/* <ScrollView
         style={styles.container}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
-        }>
-        <View style={styles.MainContainer}>
-          <View style={[styles.product]}>
-            <View style={[styles.bigWith]}>
-              <Text style={[styles.Datatitle, styles.DataTitleBig]}>
-                ₹ {totalEarning}/-
+        }> */}
+      <View style={styles.MainContainer}>
+        <View style={[styles.product]}>
+          <View style={[styles.bigWith]}>
+            <Text style={[styles.Datatitle, styles.DataTitleBig]}>
+              ₹ {totalEarning}/-
+            </Text>
+            <Text style={styles.DataSmall}>
+              ₹ {paidEarning} + ₹ {totalEarning - paidEarning} Pending
+            </Text>
+          </View>
+          <View style={styles.productDescBox}>
+            <Pressable
+              onPress={
+                () => {
+                  setFilterDisplay(0);
+                } // navigation.navigate('Trainings')
+              }
+              style={styles.customBox}>
+              <Text color="#535353">
+                <FontAwesome name="filter" size={20} color="#535353" /> Filter
               </Text>
-              <Text style={styles.DataSmall}>
-                ₹ {paidEarning} + ₹ {totalEarning - paidEarning} Pending
-              </Text>
-            </View>
-            <View style={styles.productDescBox}>
-              <Pressable
-                onPress={
-                  () => {
-                    setFilterDisplay(0);
-                  } // navigation.navigate('Trainings')
-                }
-                style={styles.customBox}>
-                <Text color="#535353">
-                  <FontAwesome name="filter" size={20} color="#535353" /> Filter
-                </Text>
-              </Pressable>
-            </View>
+            </Pressable>
           </View>
         </View>
+      </View>
 
-        {/*
+      {/*
           <View style={styles.MainContainer}>
               <View style={[ styles.marginTop10]}>
                   <View style={styles.cardContainer}>
@@ -914,172 +909,185 @@ const Myearning = ({navigation}) => {
               </View>  
           </View>
           */}
-        <View style={styles.Btnrow}>
-          <Pressable
+      <View style={styles.Btnrow}>
+        <Pressable
+          style={[
+            styles.button,
+            selectedButton == '1' && styles.selectedButton,
+          ]}
+          onPress={() => handleButtonClick('1', '')}>
+          <Text
             style={[
-              styles.button,
-              selectedButton == '1' && styles.selectedButton,
-            ]}
-            onPress={() => handleButtonClick('1', '')}>
-            <Text
-              style={[
-                styles.buttonText,
-                selectedButton === '1' && styles.selectedText,
-              ]}>
-              By Self
-            </Text>
-          </Pressable>
-          <Pressable
+              styles.buttonText,
+              selectedButton === '1' && styles.selectedText,
+            ]}>
+            By Self
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[
+            styles.button,
+            selectedButton === '2' && styles.selectedButton,
+          ]}
+          onPress={() => handleButtonClick('2', '')}>
+          <Text
             style={[
-              styles.button,
-              selectedButton === '2' && styles.selectedButton,
-            ]}
-            onPress={() => handleButtonClick('2', '')}>
-            <Text
-              style={[
-                styles.buttonText,
-                selectedButton === '2' && styles.selectedText,
-              ]}>
-              By Team
-            </Text>
-          </Pressable>
-        </View>
-        {/* <Text style={styles.selectedText}>Selected: {ProductName}</Text>
+              styles.buttonText,
+              selectedButton === '2' && styles.selectedText,
+            ]}>
+            By Team
+          </Text>
+        </Pressable>
+      </View>
+      {/* <Text style={styles.selectedText}>Selected: {ProductName}</Text>
       <Text style={styles.selectedText}>Lead Status: {LeadStatus}</Text> */}
 
-        <FlatList
-          data={earning}
-          style={[styles.pmaincontrainer]}
-          keyExtractor={item => item.transectionId || `earning-${item.leadId}`}
-          renderItem={({item}) => (
-            <View style={styles.MainContainer}>
-              <View
-                style={[
-                  styles.product,
-                  styles.BackgroundWhite,
-                  styles.marginTop10,
-                  styles.paddingTop10,
-                ]}>
-                <View style={[styles.bigWith]}>
-                  <Text style={styles.Datatitle}>{item.title}</Text>
-                  <Text style={styles.Datadesc}>{item.AgentName}</Text>
-                  <Text style={styles.Datadesc}>Lead Id : {item.leadId}</Text>
-                </View>
-                <View style={styles.productDescBox}>
-                  <Text
-                    style={[styles.status, styles.statusColor[item.Status]]}>
-                    {item.Status == 1 ? 'Paid' : 'Not Paid'}
-                  </Text>
-                  <Text style={styles.LeadId}>Amount : ₹ {item.Amount}/-</Text>
-                </View>
+      <FlatList
+        data={earning}
+        style={[styles.pmaincontrainer]}
+        keyExtractor={item => item.transectionId || `earning-${item.leadId}`}
+        renderItem={({item}) => (
+          <View style={styles.MainContainer}>
+            <View
+              style={[
+                styles.product,
+                styles.BackgroundWhite,
+                styles.marginTop10,
+                styles.paddingTop10,
+              ]}>
+              <View style={[styles.bigWith]}>
+                <Text style={styles.Datatitle}>{item.title}</Text>
+                <Text style={styles.Datadesc}>{item.AgentName}</Text>
+                <Text style={styles.Datadesc}>Lead Id : {item.leadId}</Text>
               </View>
-              <View style={[styles.product, styles.BackgroundWhite]}>
-                <View style={[styles.productDescBox, styles.MBackgroundGray]}>
-                  <Text style={[styles.Datadesc, styles.colorblue]}>
-                    Approved Date
-                  </Text>
-                  <Text style={styles.Datatitle}>{item.CreatedAt}</Text>
-                </View>
-                <View style={[styles.productDescBox, styles.MBackgroundGray]}>
-                  <Text style={[styles.Datadesc, styles.colorblue]}>
-                    A/C Transfer Date
-                  </Text>
-                  <Text style={styles.Datatitle}>{item.expectedPD}</Text>
-                </View>
-                <View style={[styles.productDescBox, styles.MBackgroundGray]}>
-                  <Text style={[styles.Datadesc, styles.colorblue]}>
-                    Work By Friend
-                  </Text>
-                  <Text style={styles.Datatitle}>
-                    {item.AgentName.split(' ')['0']}
-                  </Text>
-                </View>
+              <View style={styles.productDescBox}>
+                <Text style={[styles.status, styles.statusColor[item.Status]]}>
+                  {item.Status == 1 ? 'Paid' : 'Not Paid'}
+                </Text>
+                <Text style={styles.LeadId}>Amount : ₹ {item.Amount}/-</Text>
               </View>
             </View>
-          )}
-          horizontal={false}
-          numColumns={1}
-          ListFooterComponent={
-            isLoadingMore ? (
-              <View style={styles.loaderContainer}>
-                <ActivityIndicator size="small" color="#0d4574" />
+            <View style={[styles.product, styles.BackgroundWhite]}>
+              <View style={[styles.productDescBox, styles.MBackgroundGray]}>
+                <Text style={[styles.Datadesc, styles.colorblue]}>
+                  Approved Date
+                </Text>
+                <Text style={styles.Datatitle}>{item.CreatedAt}</Text>
               </View>
-            ) : null
-          }
-          // onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.5}
-        />
+              <View style={[styles.productDescBox, styles.MBackgroundGray]}>
+                <Text style={[styles.Datadesc, styles.colorblue]}>
+                  A/C Transfer Date
+                </Text>
+                <Text style={styles.Datatitle}>{item.expectedPD}</Text>
+              </View>
+              <View style={[styles.productDescBox, styles.MBackgroundGray]}>
+                <Text style={[styles.Datadesc, styles.colorblue]}>
+                  Work By Friend
+                </Text>
+                <Text style={styles.Datatitle}>
+                  {item.AgentName.split(' ')['0']}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+        horizontal={false}
+        numColumns={1}
+        contentContainerStyle={{paddingBottom: 50}}
+        ListFooterComponent={
+          isLoadingMore ? (
+            <View style={styles.loaderContainer}>
+              <ActivityIndicator size="small" color="#0d4574" />
+            </View>
+          ) : null
+        }
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.2}
+        keyboardShouldPersistTaps={'handled'}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+        }
+        ListEmptyComponent={
+          <View
+            style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+            <Text
+              style={{textAlign: 'center', fontSize: 16, fontWeight: 'bold'}}>
+              No data found
+            </Text>
+          </View>
+        }
+      />
 
-        <FlatList
-          data={bonus}
-          style={[styles.pmaincontrainer, {marginBottom: 50}]}
-          keyExtractor={item => item.bonusId || `bonus-${item.leadId}`}
-          renderItem={({item}) => (
-            <View style={styles.MainContainer}>
-              <View
-                style={[
-                  styles.product,
-                  styles.BackgroundWhite,
-                  styles.marginTop10,
-                  styles.paddingTop10,
-                ]}>
-                <View style={[styles.bigWith]}>
-                  <Text style={styles.Datatitle}>
-                    {item.BonusType == 'REFERALBONUS'
-                      ? 'Referal Bonus'
-                      : 'Signup Bonus'}{' '}
-                  </Text>
-                  <Text style={styles.Datadesc}>{item.fullName}</Text>
-                  <Text style={styles.Datadesc}>Lead Id : {item.leadId}</Text>
-                </View>
-                <View style={styles.productDescBox}>
-                  <Text
-                    style={[
-                      styles.status,
-                      styles.statusColor[item.PaymentStatus],
-                    ]}>
-                    {item.PaymentStatus == 1 ? 'Paid' : 'Not Paid'}
-                  </Text>
-                  <Text style={styles.LeadId}>Amount : ₹ {item.Amount}/-</Text>
-                </View>
+      {/* <FlatList
+        data={bonus}
+        style={[styles.pmaincontrainer, {marginBottom: 50}]}
+        keyExtractor={item => item.bonusId || `bonus-${item.leadId}`}
+        renderItem={({item}) => (
+          <View style={styles.MainContainer}>
+            <View
+              style={[
+                styles.product,
+                styles.BackgroundWhite,
+                styles.marginTop10,
+                styles.paddingTop10,
+              ]}>
+              <View style={[styles.bigWith]}>
+                <Text style={styles.Datatitle}>
+                  {item.BonusType == 'REFERALBONUS'
+                    ? 'Referal Bonus'
+                    : 'Signup Bonus'}{' '}
+                </Text>
+                <Text style={styles.Datadesc}>{item.fullName}</Text>
+                <Text style={styles.Datadesc}>Lead Id : {item.leadId}</Text>
               </View>
-              <View style={[styles.product, styles.BackgroundWhite]}>
-                <View style={[styles.productDescBox, styles.MBackgroundGray]}>
-                  <Text style={[styles.Datadesc, styles.colorblue]}>
-                    Approved Date
-                  </Text>
-                  <Text style={styles.Datatitle}>{item.AprovedOn}</Text>
-                </View>
-                <View style={[styles.productDescBox, styles.MBackgroundGray]}>
-                  <Text style={[styles.Datadesc, styles.colorblue]}>
-                    Payment Date
-                  </Text>
-                  <Text style={styles.Datatitle}>{item.PaidOn}</Text>
-                </View>
-                <View style={[styles.productDescBox, styles.MBackgroundGray]}>
-                  <Text style={[styles.Datadesc, styles.colorblue]}>
-                    Work By Friend
-                  </Text>
-                  <Text style={styles.Datatitle}>
-                    {item.fullName.split(' ')['0']}
-                  </Text>
-                </View>
+              <View style={styles.productDescBox}>
+                <Text
+                  style={[
+                    styles.status,
+                    styles.statusColor[item.PaymentStatus],
+                  ]}>
+                  {item.PaymentStatus == 1 ? 'Paid' : 'Not Paid'}
+                </Text>
+                <Text style={styles.LeadId}>Amount : ₹ {item.Amount}/-</Text>
               </View>
             </View>
-          )}
-          horizontal={false}
-          numColumns={1}
-          ListFooterComponent={
-            isLoadingMore ? (
-              <View style={styles.loaderContainer}>
-                <ActivityIndicator size="small" color="#0d4574" />
+            <View style={[styles.product, styles.BackgroundWhite]}>
+              <View style={[styles.productDescBox, styles.MBackgroundGray]}>
+                <Text style={[styles.Datadesc, styles.colorblue]}>
+                  Approved Date
+                </Text>
+                <Text style={styles.Datatitle}>{item.AprovedOn}</Text>
               </View>
-            ) : null
-          }
-          // onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.5}
-        />
-      </ScrollView>
+              <View style={[styles.productDescBox, styles.MBackgroundGray]}>
+                <Text style={[styles.Datadesc, styles.colorblue]}>
+                  Payment Date
+                </Text>
+                <Text style={styles.Datatitle}>{item.PaidOn}</Text>
+              </View>
+              <View style={[styles.productDescBox, styles.MBackgroundGray]}>
+                <Text style={[styles.Datadesc, styles.colorblue]}>
+                  Work By Friend
+                </Text>
+                <Text style={styles.Datatitle}>
+                  {item.fullName.split(' ')['0']}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+        horizontal={false}
+        numColumns={1}
+        ListFooterComponent={
+          isLoadingMore ? (
+            <View style={styles.loaderContainer}>
+              <ActivityIndicator size="small" color="#0d4574" />
+            </View>
+          ) : null
+        }
+        // onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+      /> */}
+      {/* </ScrollView> */}
 
       <View style={[styles.fcontainer, styles.viewFilter[FilterDisplay]]}>
         <Text style={[styles.ffiltertext]}>Filter Data</Text>
@@ -1401,6 +1409,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingBottom: 30,
   },
   pmaincontrainer: {
     width: '100%',

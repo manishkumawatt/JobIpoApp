@@ -1,10 +1,15 @@
 import React from 'react';
 import {View, Text, StyleSheet} from 'react-native';
 
-const StepIndicatorBase = ({currentStep = 1, filledSteps = []}) => {
+const StepIndicatorBase = ({
+  currentStep = 1,
+  filledSteps = [],
+  totalSteps = 3,
+}) => {
+  const steps = Array.from({length: totalSteps}, (_, i) => i + 1);
   return (
     <View style={styles.container}>
-      {[1, 2, 3].map((step, index) => (
+      {steps.map((step, index) => (
         <React.Fragment key={step}>
           <View style={styles.stepContainer}>
             <View
@@ -29,7 +34,7 @@ const StepIndicatorBase = ({currentStep = 1, filledSteps = []}) => {
               </Text>
             </View>
           </View>
-          {index < 2 && (
+          {index < totalSteps - 1 && (
             <View
               style={[
                 styles.line,
@@ -58,11 +63,11 @@ export const StepIndicator2 = () => (
 );
 
 export const StepIndicator3 = () => (
-  <StepIndicatorBase currentStep={3} filledSteps={[1, 2]} />
+  <StepIndicatorBase currentStep={3} filledSteps={[1, 2]} totalSteps={3} />
 );
 
 export const StepIndicator4 = () => (
-  <StepIndicatorBase currentStep={3} filledSteps={[1, 2, 3]} />
+  <StepIndicatorBase currentStep={4} filledSteps={[1, 2, 3]} totalSteps={4} />
 );
 
 // Styles
@@ -75,6 +80,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 10,
+    paddingHorizontal: 20,
   },
   stepContainer: {
     alignItems: 'center',
@@ -121,8 +127,9 @@ const styles = StyleSheet.create({
   },
   line: {
     height: 1,
-    width: 80,
-    marginHorizontal: -1,
+    flex: 1,
+    maxWidth: 80,
+    marginHorizontal: 8,
     zIndex: 0,
   },
   completedLine: {

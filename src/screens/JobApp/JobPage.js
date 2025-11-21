@@ -299,7 +299,7 @@ const JobPage = ({navigation, route}) => {
   const isAnimating = useRef(false);
 
   // Job type filter buttons state
-  const [selectedJobType, setSelectedJobType] = useState('Near by Jobs');
+  const [selectedJobType, setSelectedJobType] = useState('For you');
 
   // Constants
   const screenHeight = Dimensions.get('window').height;
@@ -575,9 +575,9 @@ const JobPage = ({navigation, route}) => {
 
         // Map selectedJobType to API filter key
         const jobTypeFilterMap = {
+          'For you': 'trending',
           'Near by Jobs': 'nearby',
           'Latest Jobs': 'latest',
-          'Trending Jobs': 'trending',
         };
         const jobTypeFilter = jobTypeFilterMap[selectedJobType];
 
@@ -1211,6 +1211,22 @@ const JobPage = ({navigation, route}) => {
         <TouchableOpacity
           style={[
             styles.jobTypeButton,
+            selectedJobType === 'For you' && styles.jobTypeButtonSelected,
+          ]}
+          onPress={() => {
+            setSelectedJobType('For you');
+          }}>
+          <Text
+            style={[
+              styles.jobTypeButtonText,
+              selectedJobType === 'For you' && styles.jobTypeButtonTextSelected,
+            ]}>
+            For you
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.jobTypeButton,
             selectedJobType === 'Near by Jobs' && styles.jobTypeButtonSelected,
           ]}
           onPress={() => {
@@ -1242,23 +1258,6 @@ const JobPage = ({navigation, route}) => {
             Latest Jobs
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.jobTypeButton,
-            selectedJobType === 'Trending Jobs' && styles.jobTypeButtonSelected,
-          ]}
-          onPress={() => {
-            setSelectedJobType('Trending Jobs');
-          }}>
-          <Text
-            style={[
-              styles.jobTypeButtonText,
-              selectedJobType === 'Trending Jobs' &&
-                styles.jobTypeButtonTextSelected,
-            ]}>
-            Trending Jobs
-          </Text>
-        </TouchableOpacity>
       </View>
     </View>
   ));
@@ -1273,6 +1272,9 @@ const JobPage = ({navigation, route}) => {
   return (
     <View style={{flex: 1, backgroundColor: '#F5F4FD'}}>
       <TopHeaderJob handleReferPress={handleReferPress} />
+      {/* <TouchableOpacity onPress={() => navigation.navigate('RegistrationS')}>
+        <Text>Back</Text>
+      </TouchableOpacity> */}
 
       <View style={styles.container}>
         {showFilter && (

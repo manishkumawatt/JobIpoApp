@@ -205,6 +205,29 @@ const Register = ({navigation, route}) => {
 
     return () => clearTimeout(retryTimeout);
   }, []);
+  // Handle SMS code changes safely
+  useEffect(() => {
+    if (smsCode && typeof smsCode === 'string' && smsCode.length >= 4) {
+      try {
+        // Extract OTP from SMS code (assuming it's a 4-digit number)
+        const extractedOtp = smsCode.match(/\d{4}/);
+        if (extractedOtp && extractedOtp[0]) {
+          const otpDigits = extractedOtp[0].split('');
+          if (otpDigits.length === 4) {
+            setotp(otpDigits);
+            // Auto-submit OTP after a short delay
+            setTimeout(() => {
+              checkOtp(extractedOtp[0]);
+            }, 500);
+          }
+        }
+      } catch (error) {
+        if (__DEV__) {
+          // console.warn('Error processing SMS code:', error);
+        }
+      }
+    }
+  }, [smsCode]);
   const CreateUser = async () => {
     // Clone to avoid in-place mutation blocking React re-render
     const formCopy = JSON.parse(JSON.stringify(accountReq));
@@ -445,8 +468,8 @@ const Register = ({navigation, route}) => {
     ]).start();
   };
 
-  const checkOtp = async () => {
-    const enteredOtp = otp.join('').trim();
+  const checkOtp = async autoOtp => {
+    const enteredOtp = autoOtp || otp.join('').trim();
 
     if (enteredOtp.length !== 4 || otp.includes('')) {
       showToastMessage('Please enter all 4 digits of OTP.');

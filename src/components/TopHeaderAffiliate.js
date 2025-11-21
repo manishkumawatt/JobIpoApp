@@ -19,9 +19,8 @@ import {
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {CircleBorderIcon, SettingsIconB, NotificationIconB} from './SVGIcon';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import {showToastMessage} from '../utils/Toast';
-import ImageLoadView from '../utils/imageLoadView';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import imagePath from '../theme/imagePath';
 
 const {width} = Dimensions.get('window');
 
@@ -31,36 +30,10 @@ const TopHeaderAffiliateNew = () => {
   const insets = useSafeAreaInsets();
 
   const [users, setUsers] = useState('');
-  const [photo, setPhoto] = useState('');
-  const [uData, setUData] = useState('');
-  const [isLoading, setisLoading] = useState(true);
-  const [jobseekers, setJobseekers] = useState([]);
 
   useFocusEffect(
     useCallback(() => {
       methodProfile();
-      const GetDataFunc = async () => {
-        try {
-          const res = await fetch('https://jobipo.com/api/Agent/index');
-          const data = await res.json();
-          // console.log('data----', data);
-          if (data?.logout !== 1) {
-            setisLoading(false);
-            const parsedMsg = JSON.parse(data?.msg);
-            setUsers(parsedMsg?.users);
-            setUData(parsedMsg.UData || {});
-            if (parsedMsg?.jobseeker) setJobseekers(parsedMsg.jobseeker);
-          }
-        } catch (err) {
-          // // console.log('❌ Fetch Error:', err);
-          showToastMessage('Please check your internet connection.');
-        }
-      };
-      let mount = true;
-      if (mount) GetDataFunc();
-      return () => {
-        mount = false;
-      };
     }, []),
   );
   // console.log('uData----', uData);
@@ -68,21 +41,27 @@ const TopHeaderAffiliateNew = () => {
     try {
       const userID = await AsyncStorage.getItem('UserID');
 
+      const form = new FormData();
+      form.append('userID', userID); // Changed to uppercase UserID as API expects
+
       const response = await fetch(
-        `https://jobipo.com/api/v3/view-profile?UserID=${userID}`,
+        `https://jobipo.com/api/v3/view-candidate-profile`,
         {
-          method: 'GET',
           headers: {
-            'Content-Type': 'application/json',
+            // Don't set Content-Type manually - fetch will set it automatically with boundary
             Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
           },
+          method: 'POST',
+          body: form,
         },
       );
 
-      const data = await response.json();
-      // console.log('data------1----rr-', data);
+      console.log('form-----=--==-=--=-=1', form);
 
-      setPhoto(data.data.photo || null);
+      const data = await response.json();
+      console.log('data------1----rr-', data);
+
+      setUsers(data?.userData);
     } catch (error) {
       // console.error('❌ Error fetching profile:', error);
     }
@@ -153,21 +132,18 @@ const TopHeaderAffiliateNew = () => {
       <View style={styles.profileContainer}>
         <View style={{margin: 10}}>
           {/* <CircleBorderIcon /> */}
-          {photo ? (
-            <Image
-              resizeMode="cover"
-              source={{uri: photo}}
-              style={{height: 36, width: 36, borderRadius: 20}}
-            />
-          ) : (
-            <CircleBorderIcon />
-          )}
+
+          <Image
+            resizeMode="cover"
+            source={users?.photo ? {uri: users?.photo} : imagePath.user}
+            style={{height: 36, width: 36, borderRadius: 20}}
+          />
         </View>
 
         <View style={styles.profileText}>
           <Text style={styles.profileName}>{users?.fullName || 'User'}</Text>
           <Text style={styles.profilePosition}>
-            Refer Code : {uData?.referCode || ''}
+            Refer Code : {users?.uniqueCode || ''}
             {/* {jobseekers['preferred_job_Title']} */}
           </Text>
         </View>

@@ -61,21 +61,8 @@ const RegistrationS = ({navigation, route}) => {
   const [isPdfFile, setIsPdfFile] = useState(false);
   const [pdfLoadError, setPdfLoadError] = useState(false);
   const [resumeFileUri, setResumeFileUri] = useState(null);
-  const [showWorkExperienceForm, setShowWorkExperienceForm] = useState(false);
-  const [workExperiences, setWorkExperiences] = useState([
-    {
-      companyName: '',
-      industry: '',
-      location: '',
-      jobRole: '',
-      workingDuration: '',
-    },
-  ]);
   const [preferredJobTitle, setPreferredJobTitle] = useState('');
   const [filteredTitles, setFilteredTitles] = useState([]);
-
-  const [focusedWorkExpInput, setFocusedWorkExpInput] = useState(null);
-  const [locationSelected, setLocationSelected] = useState({});
   const [selectedSkills, setSelectedSkills] = useState(() => {
     try {
       return typeof data?.skills === 'string'
@@ -312,6 +299,7 @@ const RegistrationS = ({navigation, route}) => {
       if (cb) cb(false);
     }
   };
+  console.log('experience----', experience);
   const openGalleryView = async () => {
     try {
       const res = await pick({
@@ -477,6 +465,36 @@ const RegistrationS = ({navigation, route}) => {
     setResumeFileUri(null);
     setPdfLoadError(false);
   };
+  // Determine button text and action based on experience and resume
+  const getButtonText = () => {
+    if (experience === 'fresher') {
+      return 'Submit';
+    }
+    if (experience && experience !== 'fresher') {
+      if (resumeFile) {
+        return 'Submit';
+      } else {
+        return 'Next';
+      }
+    }
+    return 'Submit'; // Default
+  };
+
+  const handleButtonPress = async () => {
+    const buttonText = getButtonText();
+    if (buttonText === 'Submit') {
+      await handleSubmit();
+    } else {
+      await handleNext();
+    }
+  };
+
+  const handleNext = async () => {
+    // When "Next" is clicked (experience selected but no resume),
+    // still submit the form but skip work experience form
+    await handleSubmit();
+  };
+
   const handleSubmit = async () => {
     if (!experience) {
       showToastMessage('Please select experience', 'danger');
@@ -500,8 +518,8 @@ const RegistrationS = ({navigation, route}) => {
       const form = new FormData();
 
       // Add text fields according to API format
-      form.append('userId', userId || storedUserId || 275618);
-      form.append('jobseekerId', jobseekerId ? jobseekerId : 136503);
+      form.append('userId', userId || storedUserId || 278879);
+      form.append('jobseekerId', jobseekerId ? jobseekerId : 138674);
       form.append('totalExperience', experience);
       form.append('preferredJobIndustry', formData.preferred_job_industry);
       form.append(
@@ -571,16 +589,6 @@ const RegistrationS = ({navigation, route}) => {
         const timestamp = Date.now();
         const fileName = `${timestamp}.${fileExtension}`;
 
-        console.log('CV Upload Debug:', {
-          fileUri,
-          fileName,
-          fileType,
-          fileExtension,
-          isImageFile,
-          isPdfFile,
-          originalFileName,
-        });
-
         form.append('cv', {
           uri: fileUri,
           name: fileName,
@@ -591,15 +599,7 @@ const RegistrationS = ({navigation, route}) => {
         form.append('cv', '');
       }
       console.log('form---1--1---', form);
-      // console.log('FormData being sent:', {
-      //   userId: userId || storedUserId,
-      //   jobseekerId,
-      //   totalExperience: experience,
-      //   preferredJobIndustry: formData.preferred_job_industry,
-      //   jobTitle: data?.jobTitle || formData?.jobTitle,
-      //   current_salary: currentSalary,
-      //   hasResume: !!resumeFile,
-      // });
+
       const response = await fetch(
         'https://jobipo.com/api/v3/candidate-update-step-three',
         {
@@ -611,10 +611,7 @@ const RegistrationS = ({navigation, route}) => {
           body: form,
         },
       );
-      // headers: {
-      //   'Content-Type': 'application/json',
-      //   Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
-      // },
+
       const data = await response.json();
       console.log('data-----', data);
       if (data && data?.success) {
@@ -625,400 +622,31 @@ const RegistrationS = ({navigation, route}) => {
         console.log('username-=-=-=-=-', username);
         let Token = await AsyncStorage.getItem('Token');
         console.log('Token-=-=-=-=-', Token);
-        if (resumeFile) {
-          setShowWorkExperienceForm(true);
-        } else {
+        if (
+          experience === 'fresher' ||
+          (experience && experience !== 'fresher' && resumeFile)
+        ) {
+          console.log('inside------- submit');
           await signIn(String(Token), username || data?.userData?.fullName);
+        } else {
+          console.log('inside------- next');
+          // Navigate to step 4 instead of showing inline form
+          navigation.navigate('RegistrationStep4', {
+            userId: userId || storedUserId,
+            jobseekerId: jobseekerId,
+            currentSalary: currentSalary,
+            preferredJobIndustry: formData.preferred_job_industry,
+            selectedSkills: selectedSkills,
+            fromOtpParam: route?.params?.fromOtpParam,
+          });
         }
       }
-      // if (res && res.type === 'success') {
-      //   if (userId !== '') {
-      //     const formdata = {user_id: userId};
-
-      //     try {
-      //       const response = await fetch(
-      //         'https://jobipo.com/api/v2/auto-login',
-      //         {
-      //           method: 'POST',
-      //           headers: {
-      //             'Content-Type': 'application/json',
-      //           },
-      //           body: JSON.stringify(formdata),
-      //         },
-      //       );
-
-      //       const ResData = await response.json();
-
-      //       await AsyncStorage.setItem('UserID', String(ResData.user_id));
-      //       const storedUserId = await AsyncStorage.getItem('UserID');
-      //       // // console.log('Saved userId in AsyncStorage:', storedUserId);
-
-      //       if (ResData.status == 1) {
-      //         // Alert.alert(ResData.message);
-      //         let userToken = String(ResData.token);
-      //         let userfullName = String(ResData.name);
-      //         let userreferCode = String(ResData.referCode);
-      //         let usercontactNumber1 = String(ResData.contact_number);
-      //         showToastMessage(ResData?.message, 'success');
-      //         await signIn(userToken, usercontactNumber1);
-      //         await AsyncStorage.setItem('contactNumber1', usercontactNumber1);
-      //         await AsyncStorage.setItem('username', userfullName);
-      //         await AsyncStorage.setItem('userreferCode', userreferCode);
-      //       } else {
-      //         showToastMessage(ResData.message, 'danger');
-      //       }
-      //     } catch (error) {
-      //       // // console.log(error);
-      //       showToastMessage('Network Error', 'danger');
-      //     }
-      //   } else {
-      //     showToastMessage('Please Fill All Data', 'danger');
-      //   }
-      // } else {
-      //   showToastMessage(res?.message || 'Something went wrong', 'danger');
-      // }
     } catch (error) {
       // console.error('API Error:', error);
       showToastMessage('Failed to submit. Please try again later.', 'danger');
     }
   };
 
-  const handleAddMoreExperience = () => {
-    setWorkExperiences([
-      ...workExperiences,
-      {
-        companyName: '',
-        industry: '',
-        location: '',
-        jobRole: '',
-        workingDuration: '',
-      },
-    ]);
-  };
-
-  const handleWorkExperienceChange = (index, field, value) => {
-    const updated = [...workExperiences];
-    updated[index][field] = value;
-    setWorkExperiences(updated);
-  };
-
-  const handleWorkExperienceSubmit = async () => {
-    // Validate all work experiences
-    for (let i = 0; i < workExperiences.length; i++) {
-      const exp = workExperiences[i];
-      if (!exp.companyName) {
-        showToastMessage(
-          `Please enter company name for experience ${i + 1}`,
-          'danger',
-        );
-        return;
-      }
-      if (!exp.industry) {
-        showToastMessage(
-          `Please select industry for experience ${i + 1}`,
-          'danger',
-        );
-        return;
-      }
-      if (!exp.location) {
-        showToastMessage(
-          `Please enter location for experience ${i + 1}`,
-          'danger',
-        );
-        return;
-      }
-      if (!exp.jobRole) {
-        showToastMessage(
-          `Please enter job role for experience ${i + 1}`,
-          'danger',
-        );
-        return;
-      }
-      if (!exp.workingDuration) {
-        showToastMessage(
-          `Please enter working duration for experience ${i + 1}`,
-          'danger',
-        );
-        return;
-      }
-    }
-
-    // Submit the original form with work experience data
-    try {
-      const storedUserId = await AsyncStorage.getItem('UserID');
-      const jobseekerIdP = await AsyncStorage.getItem('jobseekerId');
-      const {fromOtpParam} = route?.params || {};
-      const jobseekerId = fromOtpParam?.jobseekerId || jobseekerIdP || '';
-
-      // Transform workExperiences to match the expected API format
-      const experiences = workExperiences.map((exp, index) => ({
-        jobTitle: '',
-        jobRole: exp.jobRole || '',
-        companyName: exp.companyName || '',
-        currentlyWorking: '',
-        employmentType: '',
-        industry: exp.industry || '',
-        startDate: '',
-        endDate: '',
-        preferred_job_Title: '',
-        currentSalary: currentSalary || '',
-        workMode: '',
-        experienceLevel: '',
-        preferred_job_industry: formData.preferred_job_industry || '',
-        yearOfCompletion: '',
-        totalWorkingMonths: exp.workingDuration || '',
-        skills: JSON.stringify(selectedSkills || []),
-        location: exp.location || '',
-        updateIndex: String(index + 1),
-      }));
-
-      // Create the request payload with userId, jobseekerId, and experiences
-      const requestPayload = {
-        userId: Number(userId || storedUserId || 275618),
-        jobseekerId: Number(jobseekerId || 136503),
-        experiences: experiences,
-      };
-      console.log('requestPayload', JSON.stringify(requestPayload));
-      // return;
-      const response = await fetch(
-        'https://jobipo.com/api/v3/candidate-update-step-four',
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${AUTH_TOKEN}`,
-          },
-          method: 'POST',
-          body: JSON.stringify(requestPayload),
-        },
-      );
-
-      const rawText = await response.text();
-      const jsonStart = rawText.indexOf('{');
-      const jsonEnd = rawText.lastIndexOf('}');
-      const jsonString = rawText.substring(jsonStart, jsonEnd + 1);
-      const res = JSON.parse(jsonString);
-      if (res && res?.success) {
-        console.log('res--1-1---dd--', res);
-        let username = await AsyncStorage.getItem('username');
-        console.log('username-=-=-=-=-', username);
-        let Token = await AsyncStorage.getItem('Token');
-        console.log('Token-=-=-=-=-', Token);
-
-        showToastMessage(res?.message, 'success');
-
-        await signIn(String(Token), username);
-        // navigation.navigate('JobPage');
-        // handleSetRoot({name: 'JobPage'});
-        // if (userId !== '') {
-        //   const formdata = {user_id: Number(userId || storedUserId || '')};
-        //   console.log('formdata', formdata);
-        //   try {
-        //     const response = await fetch(
-        //       'https://jobipo.com/api/v2/auto-login',
-        //       {
-        //         method: 'POST',
-        //         headers: {
-        //           'Content-Type': 'application/json',
-        //         },
-        //         body: JSON.stringify(formdata),
-        //       },
-        //     );
-
-        //     const ResData = await response.json();
-        //     console.log('ResData-=-=-=-=-=', ResData);
-        //     return;
-        //     await AsyncStorage.setItem('UserID', String(ResData.user_id));
-        //     const storedUserId = await AsyncStorage.getItem('UserID');
-
-        //     if (ResData.status == 1) {
-        //       let userToken = String(ResData.token);
-        //       let userfullName = String(ResData.name);
-        //       let userreferCode = String(ResData.referCode);
-        //       let usercontactNumber1 = String(ResData.contact_number);
-        //       // showToastMessage(ResData?.message, 'success');
-        //       await signIn(userToken, usercontactNumber1);
-        //       await AsyncStorage.setItem('contactNumber1', usercontactNumber1);
-        //       await AsyncStorage.setItem('username', userfullName);
-        //       await AsyncStorage.setItem('userreferCode', userreferCode);
-        //     } else {
-        //       showToastMessage(ResData.message, 'danger');
-        //     }
-        //   } catch (error) {
-        //     showToastMessage('Network Error', 'danger');
-        //   }
-        // } else {
-        //   showToastMessage('Please Fill All Data', 'danger');
-        // }
-      } else {
-        showToastMessage(res?.message || 'Something went wrong', 'danger');
-      }
-    } catch (error) {
-      showToastMessage('Failed to submit. Please try again later.', 'danger');
-    }
-  };
-
-  const handleSkipWorkExperience = async () => {
-    // Submit without work experience data
-    try {
-      const storedUserId = await AsyncStorage.getItem('UserID');
-      const {fromOtpParam} = route?.params || {};
-      const jobseekerId = fromOtpParam?.jobseekerId || data?.jobseekerId || '';
-
-      const form = new FormData();
-
-      form.append('userId', userId || storedUserId || '');
-      form.append('jobseekerId', jobseekerId ? jobseekerId : '');
-      form.append('totalExperience', experience);
-      form.append('preferredJobIndustry', formData.preferred_job_industry);
-      form.append(
-        'jobTitle',
-        preferredJobTitle || data?.jobTitle || formData?.jobTitle || '',
-      );
-      form.append('current_salary', currentSalary || '');
-
-      if (resumeFile) {
-        // Use the resumeFileUri which is already converted to file:// URI
-        let fileUri =
-          resumeFileUri ||
-          resumeFile.uri ||
-          resumeFile.fileCopyUri ||
-          resumeFile.path;
-
-        // Get file extension from original file name or determine from file type
-        let fileExtension = '';
-        const originalFileName = resumeFileName || resumeFile.name || '';
-        if (originalFileName) {
-          fileExtension =
-            originalFileName.split('.').pop()?.toLowerCase() || '';
-        }
-
-        // Determine correct MIME type and extension
-        let fileType = resumeFile.type || resumeFile.mime;
-
-        // If no file extension detected, use isImageFile state to determine
-        if (!fileExtension && isImageFile) {
-          fileExtension = 'jpeg'; // Default to jpeg for images
-        } else if (!fileExtension && isPdfFile) {
-          fileExtension = 'pdf';
-        }
-
-        if (!fileType) {
-          if (fileExtension === 'jpg' || fileExtension === 'jpeg') {
-            fileType = 'image/jpeg';
-            fileExtension = 'jpeg'; // Use .jpeg for JPEG files
-          } else if (fileExtension === 'png') {
-            fileType = 'image/png';
-          } else if (fileExtension === 'pdf') {
-            fileType = 'application/pdf';
-          } else {
-            // Fallback based on isImageFile state
-            if (isImageFile) {
-              fileType = 'image/jpeg';
-              fileExtension = 'jpeg';
-            } else {
-              fileType = 'application/pdf';
-              fileExtension = 'pdf';
-            }
-          }
-        } else {
-          // If we have MIME type, determine extension from it
-          if (fileType === 'image/jpeg' || fileType === 'image/jpg') {
-            fileExtension = 'jpeg';
-            fileType = 'image/jpeg'; // Normalize to image/jpeg
-          } else if (fileType === 'image/png') {
-            fileExtension = 'png';
-          } else if (fileType === 'application/pdf') {
-            fileExtension = 'pdf';
-          }
-        }
-
-        // Generate filename as timestamp with correct extension
-        const timestamp = Date.now();
-        const fileName = `${timestamp}.${fileExtension}`;
-
-        console.log('CV Upload Debug (Skip):', {
-          fileUri,
-          fileName,
-          fileType,
-          fileExtension,
-          isImageFile,
-          isPdfFile,
-          originalFileName,
-        });
-
-        form.append('cv', {
-          uri: fileUri,
-          name: fileName,
-          type: fileType,
-        });
-      } else {
-        form.append('cv', '');
-      }
-
-      const response = await fetch(
-        'https://jobipo.com/api/v3/candidate-update-step-three',
-        {
-          headers: {
-            Authorization: `Bearer ${AUTH_TOKEN}`,
-          },
-          method: 'POST',
-          body: form,
-        },
-      );
-
-      const rawText = await response.text();
-      const jsonStart = rawText.indexOf('{');
-      const jsonEnd = rawText.lastIndexOf('}');
-      const jsonString = rawText.substring(jsonStart, jsonEnd + 1);
-      const res = JSON.parse(jsonString);
-
-      if (res && res.type === 'success') {
-        if (userId !== '') {
-          const formdata = {user_id: userId};
-
-          try {
-            const response = await fetch(
-              'https://jobipo.com/api/v2/auto-login',
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formdata),
-              },
-            );
-
-            const ResData = await response.json();
-
-            await AsyncStorage.setItem('UserID', String(ResData.user_id));
-            const storedUserId = await AsyncStorage.getItem('UserID');
-
-            if (ResData.status == 1) {
-              let userToken = String(ResData.token);
-              let userfullName = String(ResData.name);
-              let userreferCode = String(ResData.referCode);
-              let usercontactNumber1 = String(ResData.contact_number);
-              showToastMessage(ResData?.message, 'success');
-              await signIn(userToken, usercontactNumber1);
-              await AsyncStorage.setItem('contactNumber1', usercontactNumber1);
-              await AsyncStorage.setItem('username', userfullName);
-              await AsyncStorage.setItem('userreferCode', userreferCode);
-            } else {
-              showToastMessage(ResData.message, 'danger');
-            }
-          } catch (error) {
-            showToastMessage('Network Error', 'danger');
-          }
-        } else {
-          showToastMessage('Please Fill All Data', 'danger');
-        }
-      } else {
-        showToastMessage(res?.message || 'Something went wrong', 'danger');
-      }
-    } catch (error) {
-      showToastMessage('Failed to submit. Please try again later.', 'danger');
-    }
-  };
   const handleJobChange = text => {
     setPreferredJobTitle(text);
     // Also update formData to keep it in sync
@@ -1096,6 +724,7 @@ const RegistrationS = ({navigation, route}) => {
     setShowIndustryModal(false);
     setIndustrySearchText('');
   };
+
   // // console.log('formData?.skills-==>', formData?.skills);
   return (
     <>
@@ -1107,347 +736,108 @@ const RegistrationS = ({navigation, route}) => {
         <View style={styles.container}>
           <StepIndicator3 />
           <View style={styles.card}>
-            {showWorkExperienceForm ? (
-              // Work Experience Form
-              <>
-                {workExperiences.map((exp, index) => (
-                  <View key={index} style={styles.workExpContainer}>
-                    {workExperiences.length > 1 && (
-                      <Text style={styles.workExpTitle}>
-                        Experience {index + 1}
-                      </Text>
-                    )}
-                    <Text style={styles.label}>Company Name</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Enter your company name"
-                      value={exp.companyName}
-                      placeholderTextColor="#BABFC7"
-                      onChangeText={text =>
-                        handleWorkExperienceChange(index, 'companyName', text)
-                      }
-                    />
+            {/* Original Form */}
+            <>
+              {/* Toggle */}
+              <Text style={styles.label}>Total years of Experience</Text>
 
-                    <Text style={styles.label}>Industry</Text>
-                    <View style={styles.dropdownBox}>
-                      <Picker
-                        style={{
-                          color: exp.industry ? '#000' : '#D0D0D0',
-                        }}
-                        dropdownIconColor="#000"
-                        selectedValue={exp.industry}
-                        onValueChange={itemValue =>
-                          handleWorkExperienceChange(
-                            index,
-                            'industry',
-                            itemValue,
-                          )
-                        }>
-                        <Picker.Item label="Select Industry" value="" />
-                        <Picker.Item
-                          label="IT & Software"
-                          value="IT & Software"
-                        />
-                        <Picker.Item
-                          label="Education & Training"
-                          value="Education & Training"
-                        />
-                        <Picker.Item
-                          label="Transportation"
-                          value="Transportation"
-                        />
-                        <Picker.Item
-                          label="Facility Management"
-                          value="Facility Management"
-                        />
-                        <Picker.Item
-                          label="Real Estate & Property"
-                          value="Real Estate & Property"
-                        />
-                        <Picker.Item
-                          label="Insurance & Stock Market"
-                          value="Insurance & Stock Market"
-                        />
-                        <Picker.Item
-                          label="E-Commerce Management"
-                          value="E-Commerce Management"
-                        />
-                        <Picker.Item
-                          label="Hospitality & Tourism"
-                          value="Hospitality & Tourism"
-                        />
-                        <Picker.Item
-                          label="Healthcare & Support"
-                          value="Healthcare & Support"
-                        />
-                        <Picker.Item label="BPO & KPO" value="BPO & KPO" />
-                        <Picker.Item
-                          label="Banking, Financial Services & Insurance"
-                          value="Banking, Financial Services & Insurance"
-                        />
-                        <Picker.Item
-                          label="E-commerce & Retail"
-                          value="E-commerce & Retail"
-                        />
-                        <Picker.Item
-                          label="Healthcare & Pharmaceuticals"
-                          value="Healthcare & Pharmaceuticals"
-                        />
-                        <Picker.Item
-                          label="Engineering & Manufacturing"
-                          value="Engineering & Manufacturing"
-                        />
-                        <Picker.Item
-                          label="Sales & Marketing"
-                          value="Sales & Marketing"
-                        />
-                        <Picker.Item label="Telecom" value="Telecom" />
-                        <Picker.Item label="Automobile" value="Automobile" />
-                        <Picker.Item
-                          label="Hospitality & Travel"
-                          value="Hospitality & Travel"
-                        />
-                        <Picker.Item
-                          label="Logistics & Supply Chain"
-                          value="Logistics & Supply Chain"
-                        />
-                        <Picker.Item
-                          label="Construction & Real Estate"
-                          value="Construction & Real Estate"
-                        />
-                        <Picker.Item
-                          label="Legal & Compliance"
-                          value="Legal & Compliance"
-                        />
-                        <Picker.Item
-                          label="Media, Advertising & Entertainment"
-                          value="Media, Advertising & Entertainment"
-                        />
-                        <Picker.Item
-                          label="Agriculture & Rural Development"
-                          value="Agriculture & Rural Development"
-                        />
-                        <Picker.Item
-                          label="Human Resources & Recruitment"
-                          value="Human Resources & Recruitment"
-                        />
-                        <Picker.Item
-                          label="Design & Creative"
-                          value="Design & Creative"
-                        />
-                        <Picker.Item label="Others" value="Others" />
-                      </Picker>
+              <TouchableOpacity
+                style={styles.pickerContainer}
+                onPress={() => setShowExperienceModal(true)}
+                activeOpacity={0.7}>
+                <Text
+                  style={[
+                    styles.pickerText,
+                    experience === ''
+                      ? styles.placeholderText
+                      : styles.selectedText,
+                  ]}>
+                  {experience === ''
+                    ? 'Select Experience'
+                    : experience === 'fresher'
+                      ? 'Fresher'
+                      : `${experience} Year`}
+                </Text>
+                <Icon name="keyboard-arrow-down" size={24} color="#535353" />
+              </TouchableOpacity>
+
+              {/* Experience Modal */}
+              <Modal
+                visible={showExperienceModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowExperienceModal(false)}>
+                <TouchableOpacity
+                  style={styles.modalOverlay}
+                  activeOpacity={1}
+                  onPress={() => setShowExperienceModal(false)}>
+                  <TouchableOpacity
+                    style={styles.modalContent}
+                    activeOpacity={1}
+                    onPress={e => e.stopPropagation()}>
+                    <View style={styles.modalHeader}>
+                      <Text style={styles.modalTitle}>Select Experience</Text>
+                      <TouchableOpacity
+                        onPress={() => setShowExperienceModal(false)}>
+                        <Icon name="close" size={24} color="#535353" />
+                      </TouchableOpacity>
                     </View>
-
-                    <Text style={styles.label}>Location</Text>
-                    <PlacesAutocomplete
-                      hideBorder={true}
-                      apiKey={'AIzaSyDqBEtr9Djdq0b9NTCMmquSrKiPCCv384o'}
-                      placeholder="Search Location"
-                      value={exp.location}
-                      onPlaceSelected={(address, placeId, val) => {
-                        handleWorkExperienceChange(index, 'location', address);
-                        setLocationSelected({
-                          ...locationSelected,
-                          [index]: true,
-                        });
-                      }}
-                      showSuggestions={
-                        focusedWorkExpInput === `location-${index}` &&
-                        !locationSelected[index]
-                      }
-                      onFocus={() => {
-                        setFocusedWorkExpInput(`location-${index}`);
-                        if (locationSelected[index]) {
-                          setLocationSelected({
-                            ...locationSelected,
-                            [index]: false,
-                          });
-                        }
-                      }}
-                      onBlur={() => setFocusedWorkExpInput(null)}
-                    />
-
-                    <Text style={styles.label}>Job Role</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Enter your Job Role"
-                      value={exp.jobRole}
-                      placeholderTextColor="#BABFC7"
-                      onChangeText={text =>
-                        handleWorkExperienceChange(index, 'jobRole', text)
-                      }
-                    />
-
-                    <Text style={styles.label}>Working Duration</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Total Months"
-                      value={exp.workingDuration}
-                      placeholderTextColor="#BABFC7"
-                      keyboardType="numeric"
-                      onChangeText={text =>
-                        handleWorkExperienceChange(
-                          index,
-                          'workingDuration',
-                          text,
-                        )
-                      }
-                    />
-                  </View>
-                ))}
-
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: 10,
-                  }}>
-                  <TouchableOpacity
-                    onPress={handleAddMoreExperience}
-                    style={styles.addMoreBtn}>
-                    <Icon name="add" size={20} color="#FF8D53" />
-                    <Text style={styles.addMoreText}>Add more experience</Text>
+                    <ScrollView style={styles.modalOptions}>
+                      {[
+                        'fresher',
+                        '0-1',
+                        '1-2',
+                        '2-3',
+                        '3-5',
+                        '5-7',
+                        '7-10',
+                      ].map(exp => (
+                        <TouchableOpacity
+                          key={exp}
+                          style={[
+                            styles.modalOption,
+                            experience === exp && styles.modalOptionSelected,
+                          ]}
+                          onPress={() => {
+                            setExperience(exp);
+                            setShowExperienceModal(false);
+                          }}>
+                          <Text
+                            style={[
+                              styles.modalOptionText,
+                              experience === exp &&
+                                styles.modalOptionTextSelected,
+                            ]}>
+                            {exp === 'fresher' ? 'Fresher' : `${exp} Year`}
+                          </Text>
+                          {experience === exp && (
+                            <Icon name="check" size={20} color="#FF8D53" />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.skipBtn}
-                    onPress={handleSkipWorkExperience}>
-                    <Text style={styles.skipText}>Skip</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.continueBtn}
-                  // onPress={() => {
-                  //   setShowWorkExperienceForm(false);
-                  // }}>
-                  onPress={handleWorkExperienceSubmit}>
-                  <Text style={styles.continueText}>Submit</Text>
                 </TouchableOpacity>
+              </Modal>
 
-                <View style={styles.lastInfo}>
-                  <Text style={styles.lastInfoText}>You have an account?</Text>
-                  <Pressable onPress={() => navigation.navigate('Login')}>
-                    <Text
-                      style={[
-                        styles.lastInfoText,
-                        {
-                          marginLeft: 10,
-                          fontWeight: 'bold',
-                          backgroundColor: '#ffffff',
-                          paddingHorizontal: 8,
-                          borderRadius: 10,
-                        },
-                      ]}>
-                      Log In
-                    </Text>
-                  </Pressable>
-                </View>
-              </>
-            ) : (
-              // Original Form
-              <>
-                {/* Toggle */}
-                <Text style={styles.label}>Total years of Experience</Text>
-
+              {/* Preferred Job Industry */}
+              <View style={styles.fieldContainer}>
+                <Text style={styles.label}>Preferred Job Industry</Text>
                 <TouchableOpacity
-                  style={styles.pickerContainer}
-                  onPress={() => setShowExperienceModal(true)}
-                  activeOpacity={0.7}>
+                  style={styles.industryInput}
+                  onPress={handleIndustryModalOpen}>
                   <Text
                     style={[
-                      styles.pickerText,
-                      experience === ''
-                        ? styles.placeholderText
-                        : styles.selectedText,
+                      formData?.preferred_job_industry
+                        ? styles.industryInputText
+                        : styles.industryPlaceholderText,
                     ]}>
-                    {experience === ''
-                      ? 'Select Experience'
-                      : experience === 'fresher'
-                        ? 'Fresher'
-                        : `${experience} Year`}
+                    {formData?.preferred_job_industry || 'Select Industry'}
                   </Text>
-                  <Icon name="keyboard-arrow-down" size={24} color="#535353" />
+                  <Icon name="arrow-drop-down" size={24} color="#535353" />
                 </TouchableOpacity>
-
-                {/* Experience Modal */}
-                <Modal
-                  visible={showExperienceModal}
-                  transparent={true}
-                  animationType="fade"
-                  onRequestClose={() => setShowExperienceModal(false)}>
-                  <TouchableOpacity
-                    style={styles.modalOverlay}
-                    activeOpacity={1}
-                    onPress={() => setShowExperienceModal(false)}>
-                    <TouchableOpacity
-                      style={styles.modalContent}
-                      activeOpacity={1}
-                      onPress={e => e.stopPropagation()}>
-                      <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>Select Experience</Text>
-                        <TouchableOpacity
-                          onPress={() => setShowExperienceModal(false)}>
-                          <Icon name="close" size={24} color="#535353" />
-                        </TouchableOpacity>
-                      </View>
-                      <ScrollView style={styles.modalOptions}>
-                        {[
-                          'fresher',
-                          '0-1',
-                          '1-2',
-                          '2-3',
-                          '3-5',
-                          '5-7',
-                          '7-10',
-                        ].map(exp => (
-                          <TouchableOpacity
-                            key={exp}
-                            style={[
-                              styles.modalOption,
-                              experience === exp && styles.modalOptionSelected,
-                            ]}
-                            onPress={() => {
-                              setExperience(exp);
-                              setShowExperienceModal(false);
-                            }}>
-                            <Text
-                              style={[
-                                styles.modalOptionText,
-                                experience === exp &&
-                                  styles.modalOptionTextSelected,
-                              ]}>
-                              {exp === 'fresher' ? 'Fresher' : `${exp} Year`}
-                            </Text>
-                            {experience === exp && (
-                              <Icon name="check" size={20} color="#FF8D53" />
-                            )}
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                </Modal>
-
-                {/* Preferred Job Industry */}
-                <View style={styles.fieldContainer}>
-                  <Text style={styles.label}>Preferred Job Industry</Text>
-                  <TouchableOpacity
-                    style={styles.industryInput}
-                    onPress={handleIndustryModalOpen}>
-                    <Text
-                      style={[
-                        formData?.preferred_job_industry
-                          ? styles.industryInputText
-                          : styles.industryPlaceholderText,
-                      ]}>
-                      {formData?.preferred_job_industry || 'Select Industry'}
-                    </Text>
-                    <Icon name="arrow-drop-down" size={24} color="#535353" />
-                  </TouchableOpacity>
-                </View>
-                {/* <Text style={styles.label}>Total years of Experience</Text>
+              </View>
+              {/* <Text style={styles.label}>Total years of Experience</Text>
           <View style={styles.radioGroup}>
             {['0-1','1-2', '2-3','3-5','5-7','7-10'].map((exp) => (
               <Pressable
@@ -1461,203 +851,190 @@ const RegistrationS = ({navigation, route}) => {
               </Pressable>
             ))}
           </View> */}
-                <Text style={styles.label}>Job Title</Text>
-                <TouchableOpacity
-                  style={styles.jobTitleInput}
-                  onPress={handleJobTitleModalOpen}>
-                  <Text
-                    style={[
-                      preferredJobTitle
-                        ? styles.jobTitleInputText
-                        : styles.jobTitlePlaceholderText,
-                    ]}>
-                    {preferredJobTitle || 'Select Job Title'}
-                  </Text>
-                  <Icon name="arrow-drop-down" size={24} color="#535353" />
-                </TouchableOpacity>
-                <Text style={styles.label}>
-                  Current Salary Per Month (Optional)
+              <Text style={styles.label}>Job Title</Text>
+              <TouchableOpacity
+                style={styles.jobTitleInput}
+                onPress={handleJobTitleModalOpen}>
+                <Text
+                  style={[
+                    preferredJobTitle
+                      ? styles.jobTitleInputText
+                      : styles.jobTitlePlaceholderText,
+                  ]}>
+                  {preferredJobTitle || 'Select Job Title'}
                 </Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="₹ 00,000"
-                  keyboardType="numeric"
-                  value={currentSalary}
-                  placeholderTextColor="#BABFC7"
-                  onChangeText={setCurrentSalary}
-                />
-                {/* Resume Upload Section */}
-                <View style={styles.resumeUploadContainer}>
-                  <View style={styles.resumeUploadCard}>
-                    {!resumeFile && (
-                      <>
-                        {/* <View style={styles.uploadIconContainer}> */}
-                        <Image
-                          source={imagePath.download}
-                          style={{height: 49, width: 49, marginBottom: 10}}
-                          resizeMode="contain"
-                        />
-                        {/* </View> */}
-                        <Text style={styles.uploadInstructionText}>
-                          Upload PDF, JPG, JPEG or PNG files
-                        </Text>
-                        <Text style={styles.uploadSizeText}>
-                          Maximum file size 5MB
-                        </Text>
-                      </>
-                    )}
+                <Icon name="arrow-drop-down" size={24} color="#535353" />
+              </TouchableOpacity>
+              <Text style={styles.label}>
+                Current Salary Per Month (Optional)
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="₹ 00,000"
+                keyboardType="numeric"
+                value={currentSalary}
+                placeholderTextColor="#BABFC7"
+                onChangeText={setCurrentSalary}
+              />
+              {/* Resume Upload Section */}
+              <View style={styles.resumeUploadContainer}>
+                <View style={styles.resumeUploadCard}>
+                  {!resumeFile && (
+                    <>
+                      {/* <View style={styles.uploadIconContainer}> */}
+                      <Image
+                        source={imagePath.download}
+                        style={{height: 49, width: 49, marginBottom: 10}}
+                        resizeMode="contain"
+                      />
+                      {/* </View> */}
+                      <Text style={styles.uploadInstructionText}>
+                        Upload PDF, JPG, JPEG or PNG files
+                      </Text>
+                      <Text style={styles.uploadSizeText}>
+                        Maximum file size 5MB
+                      </Text>
+                    </>
+                  )}
 
-                    {resumeFile ? (
-                      <>
-                        {/* File Preview - PDF or Image */}
+                  {resumeFile ? (
+                    <>
+                      {/* File Preview - PDF or Image */}
+                      <TouchableOpacity
+                        style={styles.pdfPreviewContainer}
+                        onPress={() => {
+                          if (resumeFileUri) {
+                            // Check if resumeFileUri is an image URL or file
+                            const isImageUrl =
+                              isImageFile ||
+                              (resumeFileUri &&
+                                (resumeFileUri.includes('.jpg') ||
+                                  resumeFileUri.includes('.jpeg') ||
+                                  resumeFileUri.includes('.png')));
+
+                            // Check if resumeFileUri is a PDF URL or file
+                            const isPdfUrl =
+                              isPdfFile ||
+                              (resumeFileUri &&
+                                (resumeFileUri.includes('.pdf') ||
+                                  resumeFileUri.toLowerCase().includes('pdf')));
+
+                            // Open modal for both images and PDFs
+                            if (isImageUrl || isPdfUrl || resumeFileUri) {
+                              setShowPdfModal(true);
+                            }
+                          }
+                        }}
+                        activeOpacity={0.8}>
+                        {isImageFile && resumeFileUri ? (
+                          <Image
+                            source={{uri: resumeFileUri}}
+                            style={styles.pdfPreview}
+                            resizeMode="cover"
+                          />
+                        ) : (isPdfFile || resumeFileUri?.includes('.pdf')) &&
+                          !pdfLoadError &&
+                          resumeFileUri &&
+                          (resumeFileUri.startsWith('file://') ||
+                            resumeFileUri.startsWith('http://') ||
+                            resumeFileUri.startsWith('https://')) ? (
+                          <Pdf
+                            source={{uri: resumeFileUri, cache: true}}
+                            style={styles.pdfPreview}
+                            trustAllCerts={false}
+                            enablePaging={false}
+                            horizontal={false}
+                            page={1}
+                            fitPolicy={0}
+                            spacing={0}
+                            onLoadComplete={(numberOfPages, filePath) => {
+                              console.log(`Number of pages: ${numberOfPages}`);
+                              setPdfLoadError(false);
+                            }}
+                            onError={error => {
+                              console.log('PDF Error:', error);
+                              setPdfLoadError(true);
+                            }}
+                          />
+                        ) : (
+                          <View style={styles.pdfErrorContainer}>
+                            <Icon
+                              name="description"
+                              size={48}
+                              color="#FF8D53"
+                            />
+                            <Text style={styles.pdfErrorSubText}>
+                              Tap to view
+                            </Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                      <View style={styles.resumeSelectedContainer}>
                         <TouchableOpacity
-                          style={styles.pdfPreviewContainer}
+                          style={styles.resumeFileInfo}
                           onPress={() => {
-                            if (resumeFileUri) {
-                              // Check if resumeFileUri is an image URL or file
-                              const isImageUrl =
-                                isImageFile ||
-                                (resumeFileUri &&
-                                  (resumeFileUri.includes('.jpg') ||
-                                    resumeFileUri.includes('.jpeg') ||
-                                    resumeFileUri.includes('.png')));
-
-                              // Check if resumeFileUri is a PDF URL or file
-                              const isPdfUrl =
-                                isPdfFile ||
-                                (resumeFileUri &&
-                                  (resumeFileUri.includes('.pdf') ||
-                                    resumeFileUri
-                                      .toLowerCase()
-                                      .includes('pdf')));
-
-                              // Open modal for both images and PDFs
-                              if (isImageUrl || isPdfUrl || resumeFileUri) {
-                                setShowPdfModal(true);
-                              }
+                            const fileUri =
+                              resumeFile.uri ||
+                              resumeFile.fileCopyUri ||
+                              resumeFile.path;
+                            if (fileUri) {
+                              setShowPdfModal(true);
                             }
                           }}
                           activeOpacity={0.8}>
-                          {isImageFile && resumeFileUri ? (
-                            <Image
-                              source={{uri: resumeFileUri}}
-                              style={styles.pdfPreview}
-                              resizeMode="cover"
-                            />
-                          ) : (isPdfFile || resumeFileUri?.includes('.pdf')) &&
-                            !pdfLoadError &&
-                            resumeFileUri &&
-                            (resumeFileUri.startsWith('file://') ||
-                              resumeFileUri.startsWith('http://') ||
-                              resumeFileUri.startsWith('https://')) ? (
-                            <Pdf
-                              source={{uri: resumeFileUri, cache: true}}
-                              style={styles.pdfPreview}
-                              trustAllCerts={false}
-                              enablePaging={false}
-                              horizontal={false}
-                              page={1}
-                              fitPolicy={0}
-                              spacing={0}
-                              onLoadComplete={(numberOfPages, filePath) => {
-                                console.log(
-                                  `Number of pages: ${numberOfPages}`,
-                                );
-                                setPdfLoadError(false);
-                              }}
-                              onError={error => {
-                                console.log('PDF Error:', error);
-                                setPdfLoadError(true);
-                              }}
-                            />
-                          ) : (
-                            <View style={styles.pdfErrorContainer}>
-                              <Icon
-                                name="description"
-                                size={48}
-                                color="#FF8D53"
-                              />
-                              <Text style={styles.pdfErrorSubText}>
-                                Tap to view
-                              </Text>
-                            </View>
-                          )}
-                        </TouchableOpacity>
-                        <View style={styles.resumeSelectedContainer}>
+                          <Icon name="description" size={20} color="#FF8D53" />
+                          <Text style={styles.resumeFileName} numberOfLines={1}>
+                            {resumeFileName}
+                          </Text>
                           <TouchableOpacity
-                            style={styles.resumeFileInfo}
-                            onPress={() => {
-                              const fileUri =
-                                resumeFile.uri ||
-                                resumeFile.fileCopyUri ||
-                                resumeFile.path;
-                              if (fileUri) {
-                                setShowPdfModal(true);
-                              }
+                            onPress={e => {
+                              e.stopPropagation();
+                              handleRemoveResume();
                             }}
-                            activeOpacity={0.8}>
-                            <Icon
-                              name="description"
-                              size={20}
-                              color="#FF8D53"
-                            />
-                            <Text
-                              style={styles.resumeFileName}
-                              numberOfLines={1}>
-                              {resumeFileName}
-                            </Text>
-                            <TouchableOpacity
-                              onPress={e => {
-                                e.stopPropagation();
-                                handleRemoveResume();
-                              }}
-                              style={styles.removeResumeButton}>
-                              <Icon name="close" size={18} color="#fff" />
-                            </TouchableOpacity>
+                            style={styles.removeResumeButton}>
+                            <Icon name="close" size={18} color="#fff" />
                           </TouchableOpacity>
-                        </View>
-                      </>
-                    ) : (
-                      <TouchableOpacity
-                        style={styles.addResumeButton}
-                        onPress={handleSelectResume}
-                        activeOpacity={0.7}>
-                        <Icon name="add" size={20} color="#535353" />
-                        <Text style={styles.addResumeButtonText}>
-                          Add your resume
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.addResumeButton}
+                      onPress={handleSelectResume}
+                      activeOpacity={0.7}>
+                      <Icon name="add" size={20} color="#535353" />
+                      <Text style={styles.addResumeButtonText}>
+                        Add your resume
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-                <TouchableOpacity
-                  style={styles.continueBtn}
-                  onPress={handleSubmit}>
-                  <Text style={styles.continueText}>
-                    {resumeFile ? 'Next' : 'Submit'}
-                  </Text>
-                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={styles.continueBtn}
+                onPress={handleButtonPress}>
+                <Text style={styles.continueText}>{getButtonText()}</Text>
+              </TouchableOpacity>
 
-                <View style={styles.lastInfo}>
-                  <Text style={styles.lastInfoText}>You have an account?</Text>
-                  <Pressable onPress={() => navigation.navigate('Login')}>
-                    <Text
-                      style={[
-                        styles.lastInfoText,
-                        {
-                          marginLeft: 10,
-                          fontWeight: 'bold',
-                          backgroundColor: '#ffffff',
-                          paddingHorizontal: 8,
-                          borderRadius: 10,
-                        },
-                      ]}>
-                      Log In
-                    </Text>
-                  </Pressable>
-                </View>
-              </>
-            )}
+              <View style={styles.lastInfo}>
+                <Text style={styles.lastInfoText}>You have an account?</Text>
+                <Pressable onPress={() => navigation.navigate('Login')}>
+                  <Text
+                    style={[
+                      styles.lastInfoText,
+                      {
+                        marginLeft: 10,
+                        fontWeight: 'bold',
+                        backgroundColor: '#ffffff',
+                        paddingHorizontal: 8,
+                        borderRadius: 10,
+                      },
+                    ]}>
+                    Log In
+                  </Text>
+                </Pressable>
+              </View>
+            </>
           </View>
         </View>
       </KeyboardScroll>

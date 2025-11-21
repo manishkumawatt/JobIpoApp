@@ -95,6 +95,7 @@ import MoreRecharge from './src/screens/MoreRecharge.js';
 import GooglePlacesInput from './src/components/GooglePlacesInput.js';
 import RegistrationP from './src/screens/Auth/RegistrationP.js';
 import RegistrationS from './src/screens/Auth/RegistrationS.js';
+import RegistrationStep4 from './src/screens/Auth/RegistrationStep4.js';
 import RegisterScreen from './src/screens/Auth/RegisterScreen.js';
 import OtpVerifyScreen from './src/screens/Auth/OtpVerifyScreen.js';
 import Iconn from 'react-native-vector-icons/MaterialIcons';
@@ -723,6 +724,15 @@ export default function App() {
         id: 65,
         name: 'RegistrationP',
         component: RegistrationP,
+        option: ({route}) => ({
+          headerShown: false,
+          animation: 'none',
+        }),
+      },
+      {
+        id: 66,
+        name: 'RegistrationStep4',
+        component: RegistrationStep4,
         option: ({route}) => ({
           headerShown: false,
           animation: 'none',

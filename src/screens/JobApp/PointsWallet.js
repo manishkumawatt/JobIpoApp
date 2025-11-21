@@ -11,6 +11,7 @@ import {
   Image,
   Dimensions,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
@@ -33,6 +34,7 @@ const PointsWallet = ({navigation}) => {
   const [isScratching, setIsScratching] = useState(true);
   const scratchCompletedRef = React.useRef(false);
   const [showRewardDetails, setShowRewardDetails] = useState(null);
+  const [isLoadingRewards, setIsLoadingRewards] = useState(false);
 
   const pointsValue = totalPoints * 0.05; // 1 point = ₹0.05
   const isRedeemable = totalPoints >= 2000;
@@ -80,40 +82,47 @@ const PointsWallet = ({navigation}) => {
     }
   };
 
-  // Load rewards from AsyncStorage
+  // Load rewards from API
   const loadRewards = async () => {
     try {
-      const rewardsData = await AsyncStorage.getItem('user_rewards');
-      if (rewardsData) {
-        // setRewards(JSON.parse(rewardsData));
-        setRewards([
-          {id: '1', isScratched: false, points: 0, type: 'normal'},
-          {id: '2', isScratched: false, points: 0, type: 'normal'},
-          {id: '3', isScratched: false, points: 0, type: 'normal'},
-          {id: '4', isScratched: false, points: 0, type: 'normal'},
-          {id: '5', isScratched: false, points: 0, type: 'normal'},
-          {id: '6', isScratched: false, points: 0, type: 'normal'},
-          {id: '7', isScratched: false, points: 0, type: 'normal'},
-        ]);
+      setIsLoadingRewards(true);
+      const userID = await AsyncStorage.getItem('UserID');
+      if (!userID) {
+        console.warn('User ID not found in AsyncStorage');
+        setRewards([]);
+        return;
+      }
+
+      const requestData = {
+        userID: userID,
+      };
+      console.log('requestData-=-=-=--=', requestData);
+      const response = await fetch('https://jobipo.com/api/point-dashboard', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+        },
+        body: JSON.stringify(requestData),
+      });
+
+      const responseData = await response.json();
+      console.log('Point Dashboard API Response:', responseData);
+
+      if (responseData && responseData.logout != 1) {
+        // Parse the response - adjust based on actual API response structure
+        const rewardsData = responseData?.data?.scratch_cards;
+
+        setRewards(rewardsData);
       } else {
-        // Initialize with 5 default rewards if none exist
-        const initialRewards = [
-          {id: '1', isScratched: false, points: 0, type: 'normal'},
-          {id: '2', isScratched: false, points: 0, type: 'normal'},
-          {id: '3', isScratched: false, points: 0, type: 'normal'},
-          {id: '4', isScratched: false, points: 0, type: 'normal'},
-          {id: '5', isScratched: false, points: 0, type: 'normal'},
-          {id: '6', isScratched: false, points: 0, type: 'normal'},
-          {id: '7', isScratched: false, points: 0, type: 'normal'},
-        ];
-        await AsyncStorage.setItem(
-          'user_rewards',
-          JSON.stringify(initialRewards),
-        );
-        setRewards(initialRewards);
+        console.error('API Error:', responseData);
+        setRewards([]);
       }
     } catch (error) {
-      console.error('Failed to load rewards:', error);
+      console.error('Failed to load rewards from API:', error);
+      setRewards([]);
+    } finally {
+      setIsLoadingRewards(false);
     }
   };
 
@@ -124,7 +133,7 @@ const PointsWallet = ({navigation}) => {
         'user_rewards',
         JSON.stringify(updatedRewards),
       );
-      setRewards(updatedRewards);
+      // setRewards(updatedRewards);
     } catch (error) {
       console.error('Failed to save rewards:', error);
     }
@@ -455,53 +464,78 @@ const PointsWallet = ({navigation}) => {
           <View style={styles.rewardsContainer}>
             <Text style={styles.rewardsTitle}>Your Rewards</Text>
 
-            <View style={styles.rewardsGrid}>
-              {rewards.map(reward => (
-                <TouchableOpacity
-                  key={reward.id}
-                  style={[
-                    styles.rewardCard,
-                    reward.isScratched && styles.rewardCardScratched,
-                    reward.type === 'ad' && styles.rewardCardAd,
-                  ]}
-                  onPress={() => handleRewardClick(reward)}
-                  disabled={reward.isScratched}>
-                  {/* New Badge */}
-                  {!reward.isScratched && (
-                    <View style={styles.newBadge}>
-                      <Text style={styles.newBadgeText}>New</Text>
-                    </View>
-                  )}
-
-                  {/* Unscratched Card - Blue with pattern */}
-                  {!reward.isScratched && (
-                    <View style={styles.scratchCardPattern}>
-                      <View style={styles.patternIcons}>
-                        <Image
-                          source={imagePath.scratch}
-                          style={{
-                            width: '48%',
-                            height: 140,
-                            width: Dimensions.get('window').width / 2,
-                          }}
-                          resizeMode="cover"
-                        />
+            <FlatList
+              data={rewards}
+              numColumns={2}
+              keyExtractor={item =>
+                item.id?.toString() || `reward-${item.points}`
+              }
+              renderItem={({item: reward}) => (
+                console.log('reward-=-=-=--=', reward),
+                (
+                  <TouchableOpacity
+                    style={[
+                      styles.rewardCard,
+                      reward.isScratched && styles.rewardCardScratched,
+                      // reward.type === 'ad' && styles.rewardCardAd,
+                    ]}
+                    onPress={() => handleRewardClick(reward)}
+                    disabled={reward.isScratched}>
+                    {/* New Badge */}
+                    {!reward.isScratched && (
+                      <View style={styles.newBadge}>
+                        <Text style={styles.newBadgeText}>New</Text>
                       </View>
-                    </View>
-                  )}
+                    )}
 
-                  {/* Scratched Card - Revealed */}
-                  {reward.isScratched && (
-                    <View style={styles.scratchedCardContent}>
-                      <Text style={styles.scratchedPoints}>
-                        {reward.points}
-                      </Text>
-                      <Text style={styles.pointsLabelSmall}>Points</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
+                    {/* Unscratched Card - Blue with pattern */}
+                    {!reward.isScratched && (
+                      <View style={styles.scratchCardPattern}>
+                        <View style={styles.patternIcons}>
+                          <Image
+                            source={imagePath.scratch}
+                            style={{
+                              width: Dimensions.get('window').width / 2 - 30,
+                              height: 140,
+                            }}
+                            resizeMode="cover"
+                          />
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Scratched Card - Revealed */}
+                    {reward.isScratched && (
+                      <View style={styles.scratchedCardContent}>
+                        <Text style={styles.scratchedPoints}>
+                          {reward.points}
+                        </Text>
+                        <Text style={styles.pointsLabelSmall}>Points</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )
+              )}
+              contentContainerStyle={styles.rewardsGrid}
+              columnWrapperStyle={styles.rewardsRow}
+              scrollEnabled={false}
+              ListEmptyComponent={
+                isLoadingRewards ? (
+                  <View style={styles.emptyRewardsContainer}>
+                    <ActivityIndicator size="small" color="#0d4574" />
+                    <Text style={styles.emptyRewardsText}>
+                      Loading rewards...
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.emptyRewardsContainer}>
+                    <Text style={styles.emptyRewardsText}>
+                      No rewards available
+                    </Text>
+                  </View>
+                )
+              }
+            />
           </View>
 
           {/* Action Buttons */}
@@ -1044,22 +1078,33 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   rewardsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    paddingBottom: 10,
+  },
+  rewardsRow: {
     justifyContent: 'space-between',
-    gap: 10,
+    marginBottom: 10,
   },
   rewardCard: {
     width: '48%',
     height: 140,
     borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: 10,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.1,
     shadowRadius: 4,
+  },
+  emptyRewardsContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  emptyRewardsText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
   },
   rewardCardScratched: {
     backgroundColor: '#fff',
@@ -1086,7 +1131,7 @@ const styles = StyleSheet.create({
   },
   scratchCardPattern: {
     flex: 1,
-    backgroundColor: '#2196F3',
+    // backgroundColor: '#2196F3',
     justifyContent: 'center',
     alignItems: 'center',
   },

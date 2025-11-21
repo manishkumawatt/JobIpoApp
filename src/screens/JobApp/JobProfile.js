@@ -103,6 +103,40 @@ const JobProfile = () => {
   const [showJobTitleModal, setShowJobTitleModal] = useState(false);
   const [jobTitleSearchText, setJobTitleSearchText] = useState('');
   const [filteredJobTitles, setFilteredJobTitles] = useState([]);
+  const [showIndustryModal, setShowIndustryModal] = useState(false);
+  const [industrySearchText, setIndustrySearchText] = useState('');
+  const [filteredIndustries, setFilteredIndustries] = useState([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Industry list
+  const industries = [
+    'IT & Software',
+    'Education & Training',
+    'Transportation',
+    'Facility Management',
+    'Real Estate & Property',
+    'Insurance & Stock Market',
+    'E-Commerce Management',
+    'Hospitality & Tourism',
+    'Healthcare & Support',
+    'BPO & KPO',
+    'Banking, Financial Services & Insurance',
+    'E-commerce & Retail',
+    'Healthcare & Pharmaceuticals',
+    'Engineering & Manufacturing',
+    'Sales & Marketing',
+    'Telecom',
+    'Automobile',
+    'Hospitality & Travel',
+    'Logistics & Supply Chain',
+    'Construction & Real Estate',
+    'Legal & Compliance',
+    'Media, Advertising & Entertainment',
+    'Agriculture & Rural Development',
+    'Human Resources & Recruitment',
+    'Design & Creative',
+    'Others',
+  ];
   const [photo, setPhoto] = useState(null);
   const [profileUserData, setProfileUserData] = useState(null);
   const [profileJobseekerData, setProfileJobseekerData] = useState(null);
@@ -140,7 +174,7 @@ const JobProfile = () => {
       }));
     }
   }, [profileUserData]);
-
+  console.log('experienceLevel----', experienceLevel);
   // Populate jobseeker data when profileJobseekerData is fetched
   useEffect(() => {
     console.log('profileJobseekerDatapppq-----', profileJobseekerData);
@@ -152,11 +186,18 @@ const JobProfile = () => {
       if (profileJobseekerData.workMode) {
         setWorkMode(profileJobseekerData.workMode);
       }
-      if (profileJobseekerData.experienceLevel) {
+      if (
+        profileJobseekerData.experienceLevel ||
+        profileJobseekerData.totalExperience
+      ) {
         setExperienceLevel(
-          profileJobseekerData.experienceLevel == 'fresher years'
+          profileJobseekerData.totalExperience == 'fresher years'
             ? 'fresher'
-            : profileJobseekerData.experienceLevel,
+            : profileJobseekerData.totalExperience
+              ? profileJobseekerData.totalExperience + ' years'
+              : profileJobseekerData.experienceLevel == 'fresher years'
+                ? 'fresher'
+                : profileJobseekerData.experienceLevel,
         );
       }
       if (profileJobseekerData.jobTitle) {
@@ -406,11 +447,14 @@ const JobProfile = () => {
   // Fetch skill options
   useFocusEffect(
     useCallback(() => {
-      methodGetProfile();
+      // Only fetch profile if there are no unsaved changes
+      if (!hasUnsavedChanges) {
+        methodGetProfile();
+      }
       // fetchSkills();
       // fetchJobTitles();
       // fetchJobCategories();
-    }, []),
+    }, [hasUnsavedChanges]),
   );
   useEffect(() => {
     if (searchText.length >= 2) {
@@ -442,6 +486,7 @@ const JobProfile = () => {
     if (!selectedSkills.includes(skill)) {
       const updated = [...selectedSkills, skill];
       setSelectedSkills(updated);
+      setHasUnsavedChanges(true);
     }
   };
   const handleRemoveSkill = skillToRemove => {
@@ -449,6 +494,7 @@ const JobProfile = () => {
       skill => skill !== skillToRemove,
     );
     setSelectedSkills(updatedSkills);
+    setHasUnsavedChanges(true);
   };
 
   const methodGetProfile = async () => {
@@ -544,10 +590,12 @@ const JobProfile = () => {
     setLanguageKnown(prev => [...prev, lang]);
     setSearchText('');
     Keyboard.dismiss();
+    setHasUnsavedChanges(true);
   };
 
   const handleRemove = lang => {
     setLanguageKnown(prev => prev.filter(item => item !== lang));
+    setHasUnsavedChanges(true);
   };
 
   function parseIfArrayString(value) {
@@ -652,8 +700,10 @@ const JobProfile = () => {
         submissionData.append('skills[]', skill);
       });
       submissionData.append('currentLocation', preferredLocations);
-      submissionData.append('pllat', pllat);
-      submissionData.append('pllng', pllng);
+      // submissionData.append('pllat', pllat);
+      // submissionData.append('pllng', pllng);
+      submissionData.append('cllat', pllat);
+      submissionData.append('cllng', pllng);
       submissionData.append('englishSpeaking', englishSpeaking);
       submissionData.append('languageKnown', JSON.stringify(languageKnown));
       submissionData.append(
@@ -696,6 +746,7 @@ const JobProfile = () => {
       const data = await res.json();
       console.log('data-=-----==-=-=-=', data);
       if (data?.success) {
+        setHasUnsavedChanges(false); // Clear unsaved changes flag after successful update
         showToastMessage('Profile updated successfully', 'success');
         navigation.navigate('JobPage');
       } else {
@@ -743,6 +794,33 @@ const JobProfile = () => {
     setPreferredJobTitle(item.jobTitle);
     setShowJobTitleModal(false);
     setJobTitleSearchText('');
+    setHasUnsavedChanges(true);
+  };
+
+  // Handler functions for industry modal
+  const handleIndustryModalOpen = () => {
+    setIndustrySearchText('');
+    setFilteredIndustries(industries);
+    setShowIndustryModal(true);
+  };
+
+  const handleIndustryModalSearch = text => {
+    setIndustrySearchText(text);
+    if (!text.trim()) {
+      setFilteredIndustries(industries);
+    } else {
+      const filtered = industries.filter(industry =>
+        industry.toLowerCase().includes(text.toLowerCase()),
+      );
+      setFilteredIndustries(filtered);
+    }
+  };
+
+  const handleIndustryModalSelect = industry => {
+    setPreferredJobIndustry(industry);
+    setShowIndustryModal(false);
+    setIndustrySearchText('');
+    setHasUnsavedChanges(true);
   };
 
   const makeApiRequest = async (endpoint, options = {}) => {
@@ -818,6 +896,7 @@ const JobProfile = () => {
         city: city,
         pincode: pincode,
       }));
+      setHasUnsavedChanges(true);
 
       // Reset the flag after a delay to allow API updates later
       setTimeout(() => {
@@ -857,6 +936,7 @@ const JobProfile = () => {
         type: image.mime,
         fileName: image.filename,
       });
+      setHasUnsavedChanges(true);
     } catch (error) {
       console.log('Image pick cancelled or failed:', error);
     }
@@ -1051,6 +1131,7 @@ const JobProfile = () => {
         setCvPdf(fileUri);
         setCV(fileUri); // Set CV for preview
         setPdfLoadError(false); // Reset error state for new file
+        setHasUnsavedChanges(true);
         // Automatically upload after selection
         // await handleUpload(fileUri, fileType, fileName);
       }
@@ -1223,9 +1304,10 @@ const JobProfile = () => {
                 style={styles.input}
                 placeholder="Enter your email"
                 value={formData.email}
-                onChangeText={value =>
-                  setFormData(prevData => ({...prevData, email: value}))
-                }
+                onChangeText={value => {
+                  setFormData(prevData => ({...prevData, email: value}));
+                  setHasUnsavedChanges(true);
+                }}
                 editable={false}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -1249,6 +1331,7 @@ const JobProfile = () => {
                     ...prevData,
                     dateOfBirth: formatted,
                   }));
+                  setHasUnsavedChanges(true);
                 }}
                 keyboardType="numeric"
                 maxLength={10}
@@ -1257,6 +1340,7 @@ const JobProfile = () => {
                   setLocationSelected(true); // Prevent location suggestions
                 }}
                 onBlur={() => setFocusedInput(null)}
+                placeholderTextColor="#D0D0D0"
               />
             </View>
             <Text style={styles.label}>Gender</Text>
@@ -1269,9 +1353,10 @@ const JobProfile = () => {
                 <Pressable
                   key={option.value}
                   style={styles.radioWrapper}
-                  onPress={() =>
-                    setFormData({...formData, gender: option.value})
-                  }>
+                  onPress={() => {
+                    setFormData({...formData, gender: option.value});
+                    setHasUnsavedChanges(true);
+                  }}>
                   <View
                     style={[
                       styles.outerCircle,
@@ -1300,7 +1385,10 @@ const JobProfile = () => {
                       styles.button,
                       employmentType === level && styles.buttonSelected,
                     ]}
-                    onPress={() => setEmploymentType(level)}>
+                    onPress={() => {
+                      setEmploymentType(level);
+                      setHasUnsavedChanges(true);
+                    }}>
                     <Text
                       style={[
                         styles.buttonText,
@@ -1320,7 +1408,10 @@ const JobProfile = () => {
                       styles.button,
                       workMode === option && styles.buttonSelected,
                     ]}
-                    onPress={() => setWorkMode(option)}>
+                    onPress={() => {
+                      setWorkMode(option);
+                      setHasUnsavedChanges(true);
+                    }}>
                     <Text
                       style={[
                         styles.buttonText,
@@ -1340,7 +1431,10 @@ const JobProfile = () => {
                 placeholderTextColor="#D0D0D0"
                 style={styles.input}
                 value={searchText}
-                onChangeText={setSearchText}
+                onChangeText={text => {
+                  setSearchText(text);
+                  // Note: Only mark as changed when skill is actually added/removed
+                }}
                 onFocus={() => {
                   setFocusedInput('skills');
                   setLocationSelected(true); // Prevent location suggestions
@@ -1379,7 +1473,10 @@ const JobProfile = () => {
               <View style={styles.pickerWrapper}>
                 <Picker
                   selectedValue={experienceLevel}
-                  onValueChange={value => setExperienceLevel(value)}
+                  onValueChange={value => {
+                    setExperienceLevel(value);
+                    setHasUnsavedChanges(true);
+                  }}
                   style={{
                     color: experienceLevel ? '#000' : '#D0D0D0',
                   }}
@@ -1411,107 +1508,19 @@ const JobProfile = () => {
               </TouchableOpacity>
 
               <Text style={styles.label}>Preferred Job Industry</Text>
-              <View style={styles.pickerWrapper}>
-                <Picker
-                  selectedValue={preferredJobIndustry}
-                  onValueChange={value => setPreferredJobIndustry(value)}
-                  style={{
-                    color: preferredJobIndustry ? '#000' : '#D0D0D0',
-                  }}
-                  dropdownIconColor="#000">
-                  <Picker.Item
-                    label="Select Industry"
-                    value=""
-                    color="#D0D0D0"
-                  />
-                  <Picker.Item label="IT & Software" value="IT & Software" />
-                  <Picker.Item
-                    label="Education & Training"
-                    value="Education & Training"
-                  />
-                  <Picker.Item label="Transportation" value="Transportation" />
-                  <Picker.Item
-                    label="Facility Management"
-                    value="Facility Management"
-                  />
-                  <Picker.Item
-                    label="Real Estate & Property"
-                    value="Real Estate & Property"
-                  />
-                  <Picker.Item
-                    label="Insurance & Stock Market"
-                    value="Insurance & Stock Market"
-                  />
-                  <Picker.Item
-                    label="E-Commerce Management"
-                    value="E-Commerce Management"
-                  />
-                  <Picker.Item
-                    label="Hospitality & Tourism"
-                    value="Hospitality & Tourism"
-                  />
-                  <Picker.Item
-                    label="Healthcare & Support"
-                    value="Healthcare & Support"
-                  />
-                  <Picker.Item label="BPO & KPO" value="BPO & KPO" />
-                  <Picker.Item
-                    label="Banking, Financial Services & Insurance"
-                    value="Banking, Financial Services & Insurance"
-                  />
-                  <Picker.Item
-                    label="E-commerce & Retail"
-                    value="E-commerce & Retail"
-                  />
-                  <Picker.Item
-                    label="Healthcare & Pharmaceuticals"
-                    value="Healthcare & Pharmaceuticals"
-                  />
-                  <Picker.Item
-                    label="Engineering & Manufacturing"
-                    value="Engineering & Manufacturing"
-                  />
-                  <Picker.Item
-                    label="Sales & Marketing"
-                    value="Sales & Marketing"
-                  />
-                  <Picker.Item label="Telecom" value="Telecom" />
-                  <Picker.Item label="Automobile" value="Automobile" />
-                  <Picker.Item
-                    label="Hospitality & Travel"
-                    value="Hospitality & Travel"
-                  />
-                  <Picker.Item
-                    label="Logistics & Supply Chain"
-                    value="Logistics & Supply Chain"
-                  />
-                  <Picker.Item
-                    label="Construction & Real Estate"
-                    value="Construction & Real Estate"
-                  />
-                  <Picker.Item
-                    label="Legal & Compliance"
-                    value="Legal & Compliance"
-                  />
-                  <Picker.Item
-                    label="Media, Advertising & Entertainment"
-                    value="Media, Advertising & Entertainment"
-                  />
-                  <Picker.Item
-                    label="Agriculture & Rural Development"
-                    value="Agriculture & Rural Development"
-                  />
-                  <Picker.Item
-                    label="Human Resources & Recruitment"
-                    value="Human Resources & Recruitment"
-                  />
-                  <Picker.Item
-                    label="Design & Creative"
-                    value="Design & Creative"
-                  />
-                  <Picker.Item label="Others" value="Others" />
-                </Picker>
-              </View>
+              <TouchableOpacity
+                style={styles.industryInput}
+                onPress={handleIndustryModalOpen}>
+                <Text
+                  style={[
+                    preferredJobIndustry
+                      ? styles.industryInputText
+                      : styles.industryPlaceholderText,
+                  ]}>
+                  {preferredJobIndustry || 'Select Industry'}
+                </Text>
+                <Icon name="arrow-drop-down" size={24} color="#535353" />
+              </TouchableOpacity>
 
               <Text style={styles.label}>
                 Current Salary Per Month (Optional){' '}
@@ -1522,7 +1531,10 @@ const JobProfile = () => {
                 keyboardType="numeric"
                 placeholderTextColor="#D0D0D0"
                 value={currentSalary}
-                onChangeText={value => setCurrentSalary(value)}
+                onChangeText={value => {
+                  setCurrentSalary(value);
+                  setHasUnsavedChanges(true);
+                }}
                 onFocus={() => {
                   setFocusedInput('currentSalary');
                   setLocationSelected(true); // Prevent location suggestions
@@ -1579,7 +1591,10 @@ const JobProfile = () => {
                       styles.radioBtn,
                       englishSpeaking === level && styles.radioBtnActive,
                     ]}
-                    onPress={() => setEnglishSpeaking(level)}>
+                    onPress={() => {
+                      setEnglishSpeaking(level);
+                      setHasUnsavedChanges(true);
+                    }}>
                     <Text
                       style={[
                         styles.radioText,
@@ -1600,6 +1615,7 @@ const JobProfile = () => {
               placeholder="Type to search and add..."
               value={searchText}
               onChangeText={setSearchText}
+              placeholderTextColor="#D0D0D0"
             />
 
             {searchText.length > 0 && filteredLanguages.length > 0 && (
@@ -2064,7 +2080,7 @@ const JobProfile = () => {
               <TextInput
                 style={styles.modalSearchInput}
                 placeholder="Search Job Title"
-                placeholderTextColor="#BABFC7"
+                placeholderTextColor="#D0D0D0"
                 value={jobTitleSearchText}
                 onChangeText={handleJobTitleModalSearch}
                 autoFocus={true}
@@ -2098,6 +2114,73 @@ const JobProfile = () => {
               ) : (
                 <View style={styles.noResultsContainer}>
                   <Text style={styles.noResultsText}>No job titles found</Text>
+                </View>
+              )}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Industry Selection Modal */}
+      <Modal
+        visible={showIndustryModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowIndustryModal(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowIndustryModal(false)}>
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={e => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Industry</Text>
+              <TouchableOpacity onPress={() => setShowIndustryModal(false)}>
+                <Icon name="close" size={24} color="#535353" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalSearchContainer}>
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Search Industry"
+                placeholderTextColor="#D0D0D0"
+                value={industrySearchText}
+                onChangeText={handleIndustryModalSearch}
+                autoFocus={true}
+              />
+              <Icon name="search" size={24} color="#535353" />
+            </View>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              style={styles.modalOptions}>
+              {filteredIndustries.length > 0 ? (
+                filteredIndustries.map((industry, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.modalOption,
+                      preferredJobIndustry === industry &&
+                        styles.modalOptionSelected,
+                    ]}
+                    onPress={() => handleIndustryModalSelect(industry)}>
+                    <Text
+                      style={[
+                        styles.modalOptionText,
+                        preferredJobIndustry === industry &&
+                          styles.modalOptionTextSelected,
+                      ]}>
+                      {industry}
+                    </Text>
+                    {preferredJobIndustry === industry && (
+                      <Icon name="check" size={20} color="#FF8D53" />
+                    )}
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View style={styles.noResultsContainer}>
+                  <Text style={styles.noResultsText}>No industries found</Text>
                 </View>
               )}
             </ScrollView>
@@ -2442,6 +2525,29 @@ const styles = StyleSheet.create({
   noResultsText: {
     fontSize: 16,
     color: '#999',
+  },
+  industryInput: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 10,
+    height: 45,
+    // borderWidth: 1,
+    // borderColor: '#E0E0E0',
+  },
+  industryInputText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+  industryPlaceholderText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#D0D0D0',
   },
   PrefrredjobDetails: {
     paddingBottom: 10,

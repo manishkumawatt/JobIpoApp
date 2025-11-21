@@ -12,6 +12,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  Dimensions,
 } from 'react-native';
 import {CommonTextInputs, KeyboardScroll} from '../../component';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -207,7 +208,7 @@ const LocationPicker = ({navigation, route}) => {
                     `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=AIzaSyDqBEtr9Djdq0b9NTCMmquSrKiPCCv384o`,
                   );
                   const data = await response.json();
-
+                  console.log('data==--=-=--=', data);
                   if (data.results && data.results.length > 0) {
                     const addressComponents =
                       data.results[0].address_components;
@@ -661,6 +662,7 @@ const LocationPicker = ({navigation, route}) => {
                 value={citySearchQuery}
                 onChangeText={setCitySearchQuery}
                 autoFocus={false}
+                placeholderTextColor={'grey'}
               />
             </View>
 
@@ -798,6 +800,7 @@ const LocationPicker = ({navigation, route}) => {
               <PlacesAutocomplete
                 apiKey={'AIzaSyDqBEtr9Djdq0b9NTCMmquSrKiPCCv384o'}
                 value={area}
+                placeholderTextColor="#BABFC7"
                 onPlaceSelected={(address, placeId, val) => {
                   console.log('address=-=-=-=-', val);
 
@@ -1089,10 +1092,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '80%',
+    maxHeight: '90%',
     paddingBottom: 20,
     width: '100%',
-    minHeight: 300,
+    minHeight: Dimensions.get('window').height - 100,
     zIndex: 10000,
     elevation: 10000,
   },
@@ -1135,7 +1138,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.Montserrat_Regular,
   },
   modalCitiesList: {
-    maxHeight: 400,
+    maxHeight: Dimensions.get('window').height - 200,
     paddingHorizontal: 20,
   },
   modalCityItem: {
