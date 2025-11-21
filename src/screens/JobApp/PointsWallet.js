@@ -218,7 +218,6 @@ const PointsWallet = ({navigation}) => {
       return;
     }
 
-    // Mark as completed
     scratchCompletedRef.current = true;
 
     const points = revealedPoints; // Use the pre-generated points
